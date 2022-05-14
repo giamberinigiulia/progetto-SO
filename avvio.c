@@ -17,17 +17,25 @@ void error()
 int main(int argc, char *param[])
 {
     //char *str[] = {"ETCS1","ETCS2","MAPPA1","MAPPA2","RBC"};
+    char *mappaSelezionata;
     if(argc<3 || argc>4) error();
     else if(strcmp(param[1],ETCS1)==0) //ETCS1
     {
-        printf("Modalità %s\n", param[1]);
         if(strcmp(param[2],MAPPA1)==0) //MAPPA1
         {
-            printf("Mappa %s\n", param[2]);
+            mappaSelezionata = MAPPA1;
         }
         else if(strcmp(param[2],MAPPA2)==0) //MAPPA2
         {
-            printf("Mappa %s\n", param[2]);
+            mappaSelezionata = MAPPA2;
+        }
+        if(fork() == 0)
+        {
+            registro();
+        }
+        if(fork() == 0)
+        {
+            padre_treni(mappaSelezionata);
         }
     }
     else if(strcmp(param[1],ETCS2)==0) //ETCS2
