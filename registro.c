@@ -9,16 +9,16 @@ int main(char argc, char *argvs[]) //funzione registro
     {
         {
             "1 1-2-3-8 6",
-            "da s2 a s5",
-            "da s7 a s3",
-            "da 24 a s8"
+            "2 5-6-7-3-8 6",
+            "7 13-12-11-10-9 3",
+            "4 14-15-16-12 8"
         },
         {
-            "da s2 a s6",
-            "da s3 a s8",
-            "da s4 a s8",
-            "da s6 a s1",
-            "da s5 a s1"
+            "1 5-6-7-3-8 6",
+            "3 9-10-11-12 8",
+            "4 14-15-16-12 8",
+            "6 8-3-2-1 1",
+            "5 4-3-2-1 1"
         },
     }; //array bidimensionale che contiene le mappe in stringa
     printf("Il treno %s ha selezionato la mappa %s\n",argvs[1],argvs[2]);
