@@ -16,7 +16,6 @@ void error()
 
 int main(int argc, char *param[])
 {
-    //char *str[] = {"ETCS1","ETCS2","MAPPA1","MAPPA2","RBC"};
     char *mappaSelezionata;
     if(argc<3 || argc>4) error();
     else if(strcmp(param[1],ETCS1)==0) //ETCS1
@@ -33,7 +32,7 @@ int main(int argc, char *param[])
         {
             registro();
         }
-        if(fork() == 0)
+        else if(fork() == 0)
         {
             padre_treni(mappaSelezionata);
         }
