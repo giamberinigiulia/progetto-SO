@@ -1,8 +1,6 @@
 #include <stdio.h>
 #include <string.h>
-#include <stdio.h>
 #include <stdlib.h>
-#include <stdio.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -15,12 +13,12 @@ char *itinerario(char buffer[100]) //si può cambiare in due char per ottenere i
     {
         {
             "1 1-2-3-8 6",
-            "2 5-6-7-3-8 6",
+            "2 5-6-7-3-4 5",
             "7 13-12-11-10-9 3",
             "4 14-15-16-12 8"
         },
         {
-            "1 5-6-7-3-8 6",
+            "2 5-6-7-3-8 6",
             "3 9-10-11-12 8",
             "4 14-15-16-12 8",
             "6 8-3-2-1 1",
@@ -51,8 +49,8 @@ return 1;
 }
 
 mio_server.sun_family = AF_UNIX;
-strcpy(mio_server.sun_path, "socketRegistro");
-unlink("socketRegistro");
+strcpy(mio_server.sun_path, "registroTreni");
+unlink("registroTreni");
 bind (socket_descrittore, (struct sockaddr *)&mio_server, sizeof (mio_server));
 
 listen (socket_descrittore, 1);
@@ -69,10 +67,9 @@ while(1)
         printf("Ricezione: %s\n",buffer_ricezione);
 
         risposta = itinerario(buffer_ricezione);
-
+        
         write(socket_client, risposta, strlen (risposta));
         printf ("Invio della risposta: %s\n", risposta);
-
         close(socket_client);
         exit(0);
     }
