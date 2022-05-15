@@ -44,10 +44,15 @@ struct sockaddr_un client;
 char *risposta;
 char buffer_ricezione[100];
 
+//pensavo di creare una funzione tipo: creazioneSocket() 
+//gli passiamo il nome della socket che vogliamo creare e lei ci torna il filedescriptor che ci serve
+//almeno la possiamo usare in tutte le creazioni di socket senza dover scrivere codice 
+//simile perchè magari diamo nomi diversi
+
 socket_descrittore = socket (AF_UNIX, SOCK_STREAM, 0);
 if (socket_descrittore == -1) {
-printf ("Errore di creazione socket.\n");
-return 1;
+    printf ("Errore di creazione socket.\n");
+    return 1;
 }
 
 mio_server.sun_family = AF_UNIX;
