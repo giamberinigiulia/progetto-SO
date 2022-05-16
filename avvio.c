@@ -119,9 +119,7 @@ int treno(int id, int mappa)    // funzione che rappresenta i processi treni: pr
     } while (connessione == -1);
     char arg[3] = {id + '0', ' ', mappa + '0'};
     write(trenoFd, arg, 3);
-    char itinerario[20];
-    for(int i = 0; i<20; i++)   // inizializza l'area di memoria a \0
-        itinerario[i] = '\0';
+    char itinerario[20] = {0};  // inizializzo l'area di memoria a 0
     read(trenoFd, itinerario, 100);
     printf("Risposta per il treno %d: %s\n", id, itinerario);
     close(trenoFd);
@@ -147,6 +145,7 @@ int padre_treni(char *mappa)    // funzione che crea i processi treni: prende co
     char dirName[16] = "directoryMA";
     system("rm -rf directoryMA"); // se esiste di già
     char s[20]="./directoryMA/MA";
+    umask(000);
     mkdir(dirName, 0777);
     for(int i=0;i<16;i++)
     {
