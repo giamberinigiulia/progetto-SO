@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <time.h>
 
 #define MAPPA1 "MAPPA1"
 #define MAPPA2 "MAPPA2"
@@ -99,9 +100,14 @@ int registro()
 
 int treno(int id, int mappa)    // funzione che rappresenta i processi treni: prende come parametri l'id del treno e il tipo di mappa selezionata
 {
-    int trenoFd, serverLen, connessione;
+    int trenoFd, serverLen, connessione, logFd;
+    char fileLog[13];
     struct sockaddr_un indirizzoServer;
     struct sockaddr* serverSockAddrPtr;
+
+    sprintf (fileLog,"./log/T%1d.log",id);  // ogni treno crea il proprio file di log nella directory log
+    umask(000);
+    logFd = open(fileLog,O_RDWR|O_CREAT, 0666);
 
     serverSockAddrPtr = (struct sockaddr*) &indirizzoServer;
     serverLen = sizeof (indirizzoServer);
@@ -121,6 +127,16 @@ int treno(int id, int mappa)    // funzione che rappresenta i processi treni: pr
     write(trenoFd, arg, 3);
     char itinerario[20] = {0};  // inizializzo l'area di memoria a 0
     read(trenoFd, itinerario, 100);
+    char recordLog[60] = {0};   // variabile per il primo record da scriver nel file log
+    time_t date;
+    date = time(NULL);  // data attuale
+
+    /*
+        DA SISTEMARE IL RECORD PER IL FILE LOG NEL CASO DEI BINARI CON DOPPIA CIFRA
+    */
+    
+    sprintf(recordLog, "[ATTUALE: S%c], [NEXT: MA%c], %s", itinerario[0], itinerario[2], ctime(&date));    // primo record del file log
+    write(logFd, recordLog, strlen(recordLog));
     printf("Risposta per il treno %d: %s\n", id, itinerario);
     close(trenoFd);
     return 0;
@@ -139,14 +155,22 @@ int creazione_treni(int numTreni, int mappa)   // funzione che crea i processi t
     return 0;
 }
 
-int padre_treni(char *mappa)    // funzione che crea i processi treni: prende come argomento la mappa selezionata
+int creazioneDirectory(char nome[16])
+{
+    char rm[23];
+    sprintf (rm,"rm -rf %s",nome);
+    system(rm); // se esiste di gia'
+    umask(000);
+    mkdir(nome, 0777);
+    return 0;
+}
+
+int padre_treni(char *mappa)    // funzione che crea la directory per i file MAx, la directory per i file log e i processi treni: prende come argomento la mappa selezionata
 {
     int fd;
-    char dirName[16] = "directoryMA";
-    system("rm -rf directoryMA"); // se esiste di già
+    creazioneDirectory("log");
+    creazioneDirectory("directoryMA");
     char s[20]="./directoryMA/MA";
-    umask(000);
-    mkdir(dirName, 0777);
     for(int i=0;i<16;i++)
     {
         sprintf (s,"./directoryMA/MA%02d",i+1);
