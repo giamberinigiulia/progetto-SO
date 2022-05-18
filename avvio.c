@@ -51,8 +51,18 @@ char *itinerario(char buffer[100]) //si può cambiare in due char per ottenere i
     return itinerario_selezionato;
 }
 
-int registro()
+int registro(char *inputMappa)
 {
+    // idea per gestione della chiusura della socket
+    //int mappa = 0;
+    int countTreni = 0;
+    if(strcmp(inputMappa, MAPPA1) == 0)    // se la mappa selezionata e' MAPPA1, il padre crea 4 figli (treni)
+    {
+        countTreni = 4;
+        //mappa = 1;
+    }
+    else countTreni = 5; //mappa = 2;
+
     int socket_descrittore; // Variabile che contiene il descrittore per il socket che andremo a creare
     int socket_client, len; // Socket del client e dimensione della struttura del socket
     struct sockaddr_un mio_server; // Struttura che contiene i dettagli del server
@@ -74,10 +84,13 @@ int registro()
 
     listen (socket_descrittore, 1);
     printf ("In ascolto.\n");
-    while(1)
+
+
+    for(int i=0;i<countTreni;i++)
     {
         int clientLen = sizeof(client);
         socket_client = accept(socket_descrittore, (struct sockaddr *)&client, &clientLen);
+        c = c + 1;
         if(fork() == 0)
         {
             printf ("Connessione in arrivo.\n");
@@ -92,9 +105,56 @@ int registro()
             close(socket_client);
             exit(0);
         }
-        else close(socket_client);
-
+        else 
+        {
+            close(socket_client);
+        }
     }
+
+    close(socket_client);
+    close(socket_descrittore);
+    unlink("registroTreni");
+    exit(0);
+
+    /*
+    int c = 0; //contatore del numero di treni in ingresso
+    while(1)
+    {
+        int clientLen = sizeof(client);
+        socket_client = accept(socket_descrittore, (struct sockaddr *)&client, &clientLen);
+        c = c + 1;
+        if(fork() == 0)
+        {
+            printf ("Connessione in arrivo.\n");
+
+            read(socket_client, buffer_ricezione, 100);
+            printf("Ricezione: %s\n",buffer_ricezione);
+
+            printf("MAPPA: %d\n",mappa);
+
+            risposta = itinerario(buffer_ricezione);
+            
+            write(socket_client, risposta, strlen (risposta));
+            printf ("Invio della risposta: %s\n", risposta);
+            close(socket_client);
+            exit(0);
+        }
+        else 
+        {
+            close(socket_client);
+        }
+        printf("MAPPA ALLA FINE: %d\n",mappa);
+        if((mappa == 1 && c >= 4 ) || (mappa == 2 && c >= 5))
+        //if(c >= 4)
+        {
+            close(socket_client);
+            close(socket_descrittore);
+            unlink("registroTreni");
+            exit(0);
+            return 0;
+        }
+
+    }*/
     return 0;
 }
 
@@ -204,7 +264,7 @@ int main(int argc, char *param[])
         }
         if(fork() == 0)
         {
-            registro();
+            registro(mappaSelezionata);
         }
         else if(fork() == 0)
         {
