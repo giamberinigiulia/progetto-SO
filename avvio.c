@@ -86,6 +86,7 @@ int registro(char *inputMappa)
     {
         int clientLen = sizeof(client);
         socket_client = accept(socket_descrittore, (struct sockaddr *)&client, &clientLen);
+        c = c + 1;
         if(fork() == 0)
         {
             printf ("Connessione in arrivo.\n");

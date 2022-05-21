@@ -47,4 +47,8 @@ int main()
             int_itinerario[element] = (int_itinerario[element] * potenza(10,c-1)) + stringa_itinerario[i] - 48;
         }
     }
+    for(int i=0;i<=element;i++)
+    {
+        printf("%d\n",int_itinerario[i]);
+    }
 } 
