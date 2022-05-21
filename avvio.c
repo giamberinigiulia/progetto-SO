@@ -25,39 +25,45 @@ void error()
     printf("\nErrore nell'inserimento dei parametri\n");
 }
 
-char *itinerario(char buffer[100]) //si può cambiare in due char per ottenere id_treno e id_mappa
+void itinerario(char buffer[100], int socket_client)
 {
-    char *mappe[2][5]=
+    int mappa1 [4][8]=
     {
-        {
-            "1 1-2-3-8 6",
-            "2 5-6-7-3-4 5",
-            "7 13-12-11-10-9 3",
-            "4 14-15-16-12 8"
-        },
-        {
-            "2 5-6-7-3-8 6",
-            "3 9-10-11-12 8",
-            "4 14-15-16-12 8",
-            "6 8-3-2-1 1",
-            "5 4-3-2-1 1"
-        },
-    }; //array bidimensionale che contiene le mappe in stringa
+        {1,1,2,3,8,6,-1},
+        {2,5,6,7,3,4,5,-1}, 
+        {7,13,12,11,10,9,3,-1}, 
+        {4,14,15,16,12,8,-1}
+    };
+    int mappa2 [5][8]=
+    {
+        {2,5,6,7,3,8,6,-1},
+        {3,9,10,11,12,8,-1}, 
+        {4,14,15,16,12,8,-1},
+        {6,8,3,2,1,1,-1},
+        {5,4,3,2,1,1,-1}
+    };
     int treno = buffer[0] - '0';//atoi(buffer[0]); //trasformo in intero l'id del treno
     int mappa = buffer[2] - '0';//atoi(buffer[2]); //trasformo in intero l'id della mappa
-    //printf("treno: %d\nmappa: %d\n",treno,mappa);
-    char *itinerario_selezionato = mappe[mappa-1][treno-1]; //seleziono percorso del treno x nella mappa y
-    printf("Itinerario: %s\n",itinerario_selezionato);
-    return itinerario_selezionato;
+    if(mappa == 1)
+        write(socket_client, mappa1[treno-1], 32);
+    else 
+        write(socket_client, mappa2[treno-1], 32);
+    close(socket_client);
+    exit(0);
 }
 
-int registro()
+int registro(char *inputMappa)
 {
+    int countTreni = 0;
+    if(strcmp(inputMappa, MAPPA1) == 0)    // se la mappa selezionata e' MAPPA1, il padre crea 4 figli (treni)
+        countTreni = 4;
+    else countTreni = 5; //mappa = 2;
+
     int socket_descrittore; // Variabile che contiene il descrittore per il socket che andremo a creare
     int socket_client, len; // Socket del client e dimensione della struttura del socket
     struct sockaddr_un mio_server; // Struttura che contiene i dettagli del server
     struct sockaddr_un client;
-    char *risposta;
+    int *risposta;
     char buffer_ricezione[100];
 
     socket_descrittore = socket (AF_UNIX, SOCK_STREAM, DEFAULT_PROTOCOL);
@@ -74,7 +80,9 @@ int registro()
 
     listen (socket_descrittore, 1);
     printf ("In ascolto.\n");
-    while(1)
+
+
+    for(int i=0;i<countTreni;i++)
     {
         int clientLen = sizeof(client);
         socket_client = accept(socket_descrittore, (struct sockaddr *)&client, &clientLen);
@@ -84,17 +92,18 @@ int registro()
 
             read(socket_client, buffer_ricezione, 100);
             printf("Ricezione: %s\n",buffer_ricezione);
-
-            risposta = itinerario(buffer_ricezione);
-            
-            write(socket_client, risposta, strlen (risposta));
-            printf ("Invio della risposta: %s\n", risposta);
-            close(socket_client);
-            exit(0);
+            itinerario(buffer_ricezione, socket_client);
         }
-        else close(socket_client);
-
+        else 
+        {
+            close(socket_client);
+        }
     }
+
+    close(socket_client);
+    close(socket_descrittore);
+    unlink("registroTreni");
+    exit(0);
     return 0;
 }
 
@@ -125,20 +134,58 @@ int treno(int id, int mappa)    // funzione che rappresenta i processi treni: pr
     } while (connessione == -1);
     char arg[3] = {id + '0', ' ', mappa + '0'};
     write(trenoFd, arg, 3);
-    char itinerario[20] = {0};  // inizializzo l'area di memoria a 0
-    read(trenoFd, itinerario, 100);
+    int itinerario[20] = {0};  // inizializzo l'area di memoria a 0
+    read(trenoFd, itinerario, 32);
     char recordLog[60] = {0};   // variabile per il primo record da scriver nel file log
     time_t date;
     date = time(NULL);  // data attuale
-
-    /*
-        DA SISTEMARE IL RECORD PER IL FILE LOG NEL CASO DEI BINARI CON DOPPIA CIFRA
-    */
     
-    sprintf(recordLog, "[ATTUALE: S%c], [NEXT: MA%c], %s", itinerario[0], itinerario[2], ctime(&date));    // primo record del file log
+    sprintf(recordLog, "[ATTUALE: S%d], [NEXT: MA%d], %s", itinerario[0], itinerario[1], ctime(&date));    // primo record del file log
     write(logFd, recordLog, strlen(recordLog));
-    printf("Risposta per il treno %d: %s\n", id, itinerario);
+    int i = 0;
+    printf("Risposta per il treno %d: ", id);
+    while(itinerario[i] != -1)
+    {
+        printf("%d ", itinerario[i]);
+        i++;
+    }
+    printf("\n");
     close(trenoFd);
+    i = 1;
+    char fileMa[19];
+    char flagFile[1];
+    int fdMa;
+    /*
+        Modificare ultimo recordLog da MA a S
+        scrivere 0 nel file MA quando viene lasciato il binario
+    */
+    while(itinerario[i+1] != -1)
+    {
+        date = time(NULL);
+        sprintf (fileMa,"./directoryMA/MA%02d",itinerario[i+1]);
+        fdMa = open(fileMa, O_RDWR);
+        read(fdMa, flagFile, 1);
+        if(strcmp(flagFile, "0") == 0)
+        {
+            flagFile[0] = '1';
+            lseek(fdMa, SEEK_SET, 0);
+            write(fdMa, flagFile, 1);
+            sprintf(recordLog, "[ATTUALE: MA%d], [NEXT: MA%d], %s", itinerario[i], itinerario[i+1], ctime(&date));
+            write(logFd, recordLog, strlen(recordLog));
+            i++;
+            close(fdMa);
+        }
+        else
+        {
+            sprintf(recordLog, "[ATTUALE: MA%d], [NEXT: MA%d], %s", itinerario[i-1], itinerario[i], ctime(&date));
+            write(logFd, recordLog, strlen(recordLog));
+        }
+        sleep(2);
+    }
+    date = time(NULL);
+    sprintf(recordLog, "[ATTUALE: S%d], [NEXT: --], %s", itinerario[i], ctime(&date));
+    write(logFd, recordLog, strlen(recordLog));
+    close(logFd);
     return 0;
 }
 
@@ -204,7 +251,7 @@ int main(int argc, char *param[])
         }
         if(fork() == 0)
         {
-            registro();
+            registro(mappaSelezionata);
         }
         else if(fork() == 0)
         {
