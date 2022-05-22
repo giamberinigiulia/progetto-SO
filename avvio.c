@@ -86,7 +86,6 @@ int registro(char *inputMappa)
     {
         int clientLen = sizeof(client);
         socket_client = accept(socket_descrittore, (struct sockaddr *)&client, &clientLen);
-        c = c + 1;
         if(fork() == 0)
         {
             printf ("Connessione in arrivo.\n");
@@ -155,34 +154,47 @@ int treno(int id, int mappa)    // funzione che rappresenta i processi treni: pr
     i = 1;
     char fileMa[19];
     char flagFile[1];
-    int fdMa;
-    /*
-        Modificare ultimo recordLog da MA a S
-        scrivere 0 nel file MA quando viene lasciato il binario
-    */
+    int fdMa, fdMaPrecedente;
+
     while(itinerario[i+1] != -1)
     {
         date = time(NULL);
-        sprintf (fileMa,"./directoryMA/MA%02d",itinerario[i+1]);
+        sprintf (fileMa,"./directoryMA/MA%02d",itinerario[i]);
         fdMa = open(fileMa, O_RDWR);
         read(fdMa, flagFile, 1);
-        if(strcmp(flagFile, "0") == 0)
+        if(flagFile[0] == '0')  // binario libero
         {
             flagFile[0] = '1';
             lseek(fdMa, SEEK_SET, 0);
             write(fdMa, flagFile, 1);
-            sprintf(recordLog, "[ATTUALE: MA%d], [NEXT: MA%d], %s", itinerario[i], itinerario[i+1], ctime(&date));
+            if(i != 1)  // se non e' il primo binario acceduto, libero il binario precedente
+            {
+                flagFile[0] = '0';
+                lseek(fdMaPrecedente, SEEK_SET, 0);
+                write(fdMaPrecedente, flagFile, 1);
+                close(fdMaPrecedente);
+            }
+            if(itinerario[i+2] == -1)   // se la prossima tappa e' l'ultima stazione modifico il testo del recordLod
+                sprintf(recordLog, "[ATTUALE: MA%d], [NEXT: S%d], %s", itinerario[i], itinerario[i+1], ctime(&date));
+            else
+                sprintf(recordLog, "[ATTUALE: MA%d], [NEXT: MA%d], %s", itinerario[i], itinerario[i+1], ctime(&date));
             write(logFd, recordLog, strlen(recordLog));
             i++;
+            fdMaPrecedente = dup(fdMa);
             close(fdMa);
         }
-        else
+        else    // binario occupato
         {
             sprintf(recordLog, "[ATTUALE: MA%d], [NEXT: MA%d], %s", itinerario[i-1], itinerario[i], ctime(&date));
             write(logFd, recordLog, strlen(recordLog));
         }
         sleep(2);
     }
+    // libero il binario precedente alla stazione
+    flagFile[0] = '0';
+    lseek(fdMaPrecedente, SEEK_SET, 0);
+    write(fdMaPrecedente, flagFile, 1);
+    close(fdMaPrecedente);
     date = time(NULL);
     sprintf(recordLog, "[ATTUALE: S%d], [NEXT: --], %s", itinerario[i], ctime(&date));
     write(logFd, recordLog, strlen(recordLog));
