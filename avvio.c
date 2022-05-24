@@ -266,7 +266,8 @@ int main(int argc, char *param[])
     + aggiungere parametro a funzione padre_treni per identificare modalità ETCS1 o ETCS2
     */
     char *mappaSelezionata;
-    if(argc<3 || argc>4) error();
+    if(argc<3 || argc>4) 
+        error();
     else if(strcmp(param[1],ETCS1)==0) //ETCS1
     {
         if(strcmp(param[2],MAPPA1)==0) //MAPPA1
@@ -288,35 +289,31 @@ int main(int argc, char *param[])
     }
     else if(strcmp(param[1],ETCS2)==0) //ETCS2
     {
-        printf("Modalità %s\t", param[1]);
         if(strcmp(param[2],MAPPA1)==0) //MAPPA1
         {
-            printf("\nMappa %s\n", param[2]);
+            mappaSelezionata = MAPPA1;
         }
         else if(strcmp(param[2],MAPPA2)==0) //MAPPA2
         {
-            printf("\nMappa %s\n", param[2]);
+            mappaSelezionata = MAPPA2;
         }
-        else if(strcmp(param[2],RBC)==0) //RBC
+        if(strcmp(param[2],RBC)==0) //RBC
         {
-            printf("%s", param[2]);
-            if(argc<4) error();
+            if(argc<4) 
+                error();
             else if(strcmp(param[3],MAPPA1)==0) //MAPPA1
             {
-                printf("\nMappa %s\n", param[3]);
+                mappaSelezionata = MAPPA1;
             }
             else if(strcmp(param[3],MAPPA2)==0) //MAPPA2
             {
-                printf("\nMappa %s\n", param[3]);
+                mappaSelezionata = MAPPA2;
             }
-            else
+            if(fork() == 0)
             {
-                error();
+                execl("./RBC", "RBC", mappaSelezionata, NULL);  // avvio del server RBC con parametro la mappa selezionata
+                exit(0);
             }
-        }
-        else
-        { 
-            error(); 
         }
     }
     else
