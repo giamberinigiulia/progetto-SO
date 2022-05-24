@@ -74,8 +74,8 @@ int registro(char *inputMappa)
     }
 
     mio_server.sun_family = AF_UNIX;
-    strcpy(mio_server.sun_path, "registroTreni");
-    unlink("registroTreni");
+    strcpy(mio_server.sun_path, "serverRegistro");
+    unlink("serverRegistro");
     bind (socket_descrittore, (struct sockaddr *)&mio_server, sizeof (mio_server));
 
     listen (socket_descrittore, 1);
@@ -102,59 +102,29 @@ int registro(char *inputMappa)
 
     close(socket_client);
     close(socket_descrittore);
-    unlink("registroTreni");
+    unlink("serverRegistro");
     exit(0);
     return 0;
 }
 
-int treno(int id, int mappa)    // funzione che rappresenta i processi treni: prende come parametri l'id del treno e il tipo di mappa selezionata
+void viaggioTreno(int id, int itinerario[20])
 {
-    int trenoFd, serverLen, connessione, logFd;
+    int logFd;
     char fileLog[13];
-    struct sockaddr_un indirizzoServer;
-    struct sockaddr* serverSockAddrPtr;
-
     sprintf (fileLog,"./log/T%1d.log",id);  // ogni treno crea il proprio file di log nella directory log
     umask(000);
     logFd = open(fileLog,O_RDWR|O_CREAT, 0666);
 
-    serverSockAddrPtr = (struct sockaddr*) &indirizzoServer;
-    serverLen = sizeof (indirizzoServer);
-    trenoFd = socket (AF_UNIX, SOCK_STREAM, DEFAULT_PROTOCOL);
-    indirizzoServer.sun_family = AF_UNIX;
-    strcpy (indirizzoServer.sun_path, "registroTreni");
-    do
-    {
-        connessione = connect (trenoFd, serverSockAddrPtr, serverLen);
-        if (connessione == -1)
-        {
-            printf("Connessione non riuscita: riprovo in 1 secondo\n");
-            sleep (1);
-        }
-    } while (connessione == -1);
-    char arg[3] = {id + '0', ' ', mappa + '0'};
-    write(trenoFd, arg, 3);
-    int itinerario[20] = {0};  // inizializzo l'area di memoria a 0
-    read(trenoFd, itinerario, 32);
-    char recordLog[60] = {0};   // variabile per il primo record da scriver nel file log
     time_t date;
-    date = time(NULL);  // data attuale
-    
-    sprintf(recordLog, "[ATTUALE: S%d], [NEXT: MA%d], %s", itinerario[0], itinerario[1], ctime(&date));    // primo record del file log
-    write(logFd, recordLog, strlen(recordLog));
-    int i = 0;
-    printf("Risposta per il treno %d: ", id);
-    while(itinerario[i] != -1)
-    {
-        printf("%d ", itinerario[i]);
-        i++;
-    }
-    printf("\n");
-    close(trenoFd);
-    i = 1;
+    date = time(NULL);
+    int i = 1;
+
     char fileMa[19];
     char flagFile[1];
+    char recordLog[60] = {0};
     int fdMa, fdMaPrecedente;
+    sprintf(recordLog, "[ATTUALE: S%d], [NEXT: MA%d], %s", itinerario[i-1], itinerario[i], ctime(&date));
+    write(logFd, recordLog, strlen(recordLog));
 
     while(itinerario[i+1] != -1)
     {
@@ -199,11 +169,52 @@ int treno(int id, int mappa)    // funzione che rappresenta i processi treni: pr
     sprintf(recordLog, "[ATTUALE: S%d], [NEXT: --], %s", itinerario[i], ctime(&date));
     write(logFd, recordLog, strlen(recordLog));
     close(logFd);
-    return 0;
 }
+
+int treno(int id, int mappa)    // funzione che rappresenta i processi treni: prende come parametri l'id del treno e il tipo di mappa selezionata
+{
+    int trenoFd, serverLen, connessione, logFd;
+    struct sockaddr_un indirizzoServer;
+    struct sockaddr* serverSockAddrPtr;
+
+    serverSockAddrPtr = (struct sockaddr*) &indirizzoServer;
+    serverLen = sizeof (indirizzoServer);
+    trenoFd = socket (AF_UNIX, SOCK_STREAM, DEFAULT_PROTOCOL);
+    indirizzoServer.sun_family = AF_UNIX;
+    strcpy (indirizzoServer.sun_path, "serverRegistro");
+    do
+    {
+        connessione = connect (trenoFd, serverSockAddrPtr, serverLen);
+        if (connessione == -1)
+        {
+            printf("Connessione non riuscita: riprovo in 1 secondo\n");
+            sleep (1);
+        }
+    } while (connessione == -1);
+    char arg[3] = {id + '0', ' ', mappa + '0'};
+    write(trenoFd, arg, 3);
+    int itinerario[20] = {0};  // inizializzo l'area di memoria a 0
+    read(trenoFd, itinerario, 32);
+
+    int i = 0;
+    printf("Risposta per il treno %d: ", id);
+    while(itinerario[i] != -1)
+    {
+        printf("%d ", itinerario[i]);
+        i++;
+    }
+    printf("\n");
+    close(trenoFd);
+
+    viaggioTreno(id,itinerario);
+}
+
 
 int creazione_treni(int numTreni, int mappa)   // funzione che crea i processi treni in base alla mappa selezionata
 {
+    /*
+    + if in base alla modalità
+    */
     for(int i = 1; i <= numTreni; i++)
     {
         if(fork() == 0)
@@ -225,6 +236,7 @@ int creazioneDirectory(char nome[16])
     return 0;
 }
 
+//aggiungere parametro per modalità
 int padre_treni(char *mappa)    // funzione che crea la directory per i file MAx, la directory per i file log e i processi treni: prende come argomento la mappa selezionata
 {
     int fd;
@@ -239,17 +251,20 @@ int padre_treni(char *mappa)    // funzione che crea la directory per i file MAx
     }
     if(strcmp(mappa, MAPPA1) == 0)    // se la mappa selezionata e' MAPPA1, il padre crea 4 figli (treni)
     {
-        creazione_treni(TRENI_MAPPA1, 1);
+        creazione_treni(TRENI_MAPPA1, 1); //agiunta modalità
     }
     else    // la mappa selezionata e' MAPPA2, il padre crea 5 figli (treni)
     {
-        creazione_treni(TRENI_MAPPA2, 2);
+        creazione_treni(TRENI_MAPPA2, 2); //agiunta modalità
     }
     return 0;
 }
 
 int main(int argc, char *param[])
 {
+    /*
+    + aggiungere parametro a funzione padre_treni per identificare modalità ETCS1 o ETCS2
+    */
     char *mappaSelezionata;
     if(argc<3 || argc>4) error();
     else if(strcmp(param[1],ETCS1)==0) //ETCS1
