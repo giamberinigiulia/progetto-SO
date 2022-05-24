@@ -207,20 +207,117 @@ int treno(int id, int mappa)    // funzione che rappresenta i processi treni: pr
     close(trenoFd);
 
     viaggioTreno(id,itinerario);
+    return 0;
 }
 
-
-int creazione_treni(int numTreni, int mappa)   // funzione che crea i processi treni in base alla mappa selezionata
+int controlloFile(int binario)  // controlla nel file MA corrispondente se effettivamente e' presente 0 (binario libero)
 {
-    /*
-    + if in base alla modalità
-    */
-    for(int i = 1; i <= numTreni; i++)
+
+}
+
+int trenoETCS2(int id, int mappa)
+{
+    int trenoFd, serverLen, connessione, logFd, risultatoControllo;
+    // buffer per la risposta dal server RBC, contiene: posizione attuale, prossima posizione, autorizzazione(0 = negata, 1 = concessa), flag se la prossima tappa e' una stazione
+    int rispostaRBC[4] = {0};
+    int infoTreno[2] = {id, 0};   // buffer che contiene l'id del treno e l'indice dell'iterazione
+    int binarioPrecedente;
+    char recordLog[60] = {0};
+    struct sockaddr_un indirizzoServer;
+    struct sockaddr* serverSockAddrPtr;
+
+    serverSockAddrPtr = (struct sockaddr*) &indirizzoServer;
+    serverLen = sizeof (indirizzoServer);
+    trenoFd = socket (AF_UNIX, SOCK_STREAM, DEFAULT_PROTOCOL);
+    indirizzoServer.sun_family = AF_UNIX;
+    strcpy (indirizzoServer.sun_path, "serverRBC");
+    do
     {
-        if(fork() == 0)
+        connessione = connect (trenoFd, serverSockAddrPtr, serverLen);
+        if (connessione == -1)
         {
-            treno(i, mappa);   // ad ogni treno viene passato il proprio id
-            exit(0);
+            printf("Connessione non riuscita: riprovo in 1 secondo\n");
+            sleep (1);
+        }
+    } while (connessione == -1);
+
+    char fileLog[13];
+    sprintf (fileLog,"./log/T%1d.log",id);  // ogni treno crea il proprio file di log nella directory log
+    umask(000);
+    logFd = open(fileLog,O_RDWR|O_CREAT, 0666);
+    time_t date;
+    date = time(NULL);
+
+    while(rispostaRBC[1] != -1)
+    {
+        write(trenoFd, infoTreno, 8);
+        read(trenoFd, rispostaRBC, 16);
+        date = time(NULL);
+        if(rispostaRBC[2] == 1) // autorizzazione concessa
+        {
+            if(infoTreno[1] == 0)  // se sono nella stazione di partenza non controllo se nei file MA c'e' effettivamente il valore 0 (libero)
+            {
+                sprintf(recordLog, "[ATTUALE: S%d], [NEXT: MA%d], %s", rispostaRBC[0], rispostaRBC[1], ctime(&date));
+                infoTreno[1]++; // incremento l'indice dell'iterazione -> il treno si e' spostato
+            }
+            else if(rispostaRBC[1] == -1)   // se sono nella stazione di arrivo non controllo se nei file MA c'e' effettivamente il valore 0 (libero)
+            {
+                sprintf(recordLog, "[ATTUALE: S%d], [NEXT: --], %s", rispostaRBC[0], ctime(&date));
+            }
+            else
+                risultatoControllo = controlloFile(rispostaRBC[0]);
+            if(risultatoControllo == 1)
+            {
+                if(rispostaRBC[3] == 1) // la prossima e' una stazione
+                    sprintf(recordLog, "[ATTUALE: MA%d], [NEXT: S%d], %s", rispostaRBC[0], rispostaRBC[1], ctime(&date));
+                else
+                    sprintf(recordLog, "[ATTUALE: MA%d], [NEXT: MA%d], %s", rispostaRBC[0], rispostaRBC[1], ctime(&date));
+                infoTreno[1]++; // incremento l'indice dell'iterazione -> il treno si e' spostato
+                binarioPrecedente = rispostaRBC[0]; // aggiorno il binario precedente
+            }
+            else    // discordanza tra risposta RBC e boe: il treno rimane fermo
+            {
+                if(rispostaRBC[3] == 1) // la prossima e' una stazione
+                        sprintf(recordLog, "[ATTUALE: MA%d], [NEXT: S%d], %s", binarioPrecedente, rispostaRBC[0], ctime(&date));
+                    else
+                        sprintf(recordLog, "[ATTUALE: MA%d], [NEXT: MA%d], %s", binarioPrecedente, rispostaRBC[0], ctime(&date));   
+            }
+        }
+        else
+        {
+            if(rispostaRBC[3] == 1) // la prossima e' una stazione
+                sprintf(recordLog, "[ATTUALE: MA%d], [NEXT: MA%d], %s", rispostaRBC[0], rispostaRBC[1], ctime(&date));
+        }
+        write(logFd, recordLog, strlen(recordLog));
+        sleep(2);
+    }
+    close(trenoFd);
+    close(logFd);
+    return 0;
+}
+
+int creazione_treni(int numTreni, int mappa, char *modalita)   // funzione che crea i processi treni in base alla mappa e alla modalita' selezionata
+{
+    if(strcmp(modalita, ETCS1) == 0)   // modalita' ETCS1
+    {
+        for(int i = 1; i <= numTreni; i++)
+        {
+            if(fork() == 0)
+            {
+                treno(i, mappa);   // ad ogni treno viene passato il proprio id
+                exit(0);
+            }
+        }
+    }
+    else    // modalita ETCS2
+    {
+        for(int i = 1; i <= numTreni; i++)
+        {
+            if(fork() == 0)
+            {
+                trenoETCS2(i, mappa);   // ad ogni treno viene passato il proprio id
+                exit(0);
+            }
         }
     }
     return 0;
@@ -236,8 +333,8 @@ int creazioneDirectory(char nome[16])
     return 0;
 }
 
-//aggiungere parametro per modalità
-int padre_treni(char *mappa)    // funzione che crea la directory per i file MAx, la directory per i file log e i processi treni: prende come argomento la mappa selezionata
+// funzione che crea la directory per i file MAx, la directory per i file log e i processi treni: prende come argomento la mappa selezionata e il tipo di modalita'
+int padre_treni(char *mappa, char *modalita)
 {
     int fd;
     creazioneDirectory("log");
@@ -251,20 +348,17 @@ int padre_treni(char *mappa)    // funzione che crea la directory per i file MAx
     }
     if(strcmp(mappa, MAPPA1) == 0)    // se la mappa selezionata e' MAPPA1, il padre crea 4 figli (treni)
     {
-        creazione_treni(TRENI_MAPPA1, 1); //agiunta modalità
+        creazione_treni(TRENI_MAPPA1, 1, modalita);
     }
     else    // la mappa selezionata e' MAPPA2, il padre crea 5 figli (treni)
     {
-        creazione_treni(TRENI_MAPPA2, 2); //agiunta modalità
+        creazione_treni(TRENI_MAPPA2, 2, modalita);
     }
     return 0;
 }
 
 int main(int argc, char *param[])
 {
-    /*
-    + aggiungere parametro a funzione padre_treni per identificare modalità ETCS1 o ETCS2
-    */
     char *mappaSelezionata;
     if(argc<3 || argc>4) 
         error();
@@ -284,7 +378,7 @@ int main(int argc, char *param[])
         }
         else if(fork() == 0)
         {
-            padre_treni(mappaSelezionata);
+            padre_treni(mappaSelezionata, ETCS1);
         }
     }
     else if(strcmp(param[1],ETCS2)==0) //ETCS2
@@ -297,7 +391,15 @@ int main(int argc, char *param[])
         {
             mappaSelezionata = MAPPA2;
         }
-        if(strcmp(param[2],RBC)==0) //RBC
+        if(fork() == 0)
+        {
+            registro(mappaSelezionata);
+        }
+        else if(fork() == 0)
+        {
+            padre_treni(mappaSelezionata, ETCS2);
+        }
+        else if(strcmp(param[2],RBC)==0) //RBC
         {
             if(argc<4) 
                 error();
