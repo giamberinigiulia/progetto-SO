@@ -78,7 +78,7 @@ int registro(char *inputMappa)
     unlink("serverRegistro");
     bind (socket_descrittore, (struct sockaddr *)&mio_server, sizeof (mio_server));
 
-    listen (socket_descrittore, 1);
+    listen (socket_descrittore, 10);
     printf ("In ascolto.\n");
 
 
@@ -107,71 +107,50 @@ int registro(char *inputMappa)
     return 0;
 }
 
-void viaggioTreno(int id, int itinerario[20])
+// funzione che controlla se i segmenti sono liberi (contenuto del file MA = 0) e scrittura nel file di log
+int viaggio(int itinerario[20], int logFd, int *fdMaPrecedente, int i)
 {
-    int logFd;
-    char fileLog[13];
-    sprintf (fileLog,"./log/T%1d.log",id);  // ogni treno crea il proprio file di log nella directory log
-    umask(000);
-    logFd = open(fileLog,O_RDWR|O_CREAT, 0666);
-
-    time_t date;
-    date = time(NULL);
-    int i = 1;
-
     char fileMa[19];
     char flagFile[1];
     char recordLog[60] = {0};
-    int fdMa, fdMaPrecedente;
-    sprintf(recordLog, "[ATTUALE: S%d], [NEXT: MA%d], %s", itinerario[i-1], itinerario[i], ctime(&date));
-    write(logFd, recordLog, strlen(recordLog));
-
-    while(itinerario[i+1] != -1)
-    {
-        date = time(NULL);
-        sprintf (fileMa,"./directoryMA/MA%02d",itinerario[i]);
-        fdMa = open(fileMa, O_RDWR);
-        read(fdMa, flagFile, 1);
-        if(flagFile[0] == '0')  // binario libero
-        {
-            flagFile[0] = '1';
-            lseek(fdMa, SEEK_SET, 0);
-            write(fdMa, flagFile, 1);
-            if(i != 1)  // se non e' il primo binario acceduto, libero il binario precedente
-            {
-                flagFile[0] = '0';
-                lseek(fdMaPrecedente, SEEK_SET, 0);
-                write(fdMaPrecedente, flagFile, 1);
-                close(fdMaPrecedente);
-            }
-            if(itinerario[i+2] == -1)   // se la prossima tappa e' l'ultima stazione modifico il testo del recordLod
-                sprintf(recordLog, "[ATTUALE: MA%d], [NEXT: S%d], %s", itinerario[i], itinerario[i+1], ctime(&date));
-            else
-                sprintf(recordLog, "[ATTUALE: MA%d], [NEXT: MA%d], %s", itinerario[i], itinerario[i+1], ctime(&date));
-            write(logFd, recordLog, strlen(recordLog));
-            i++;
-            fdMaPrecedente = dup(fdMa);
-            close(fdMa);
-        }
-        else    // binario occupato
-        {
-            sprintf(recordLog, "[ATTUALE: MA%d], [NEXT: MA%d], %s", itinerario[i-1], itinerario[i], ctime(&date));
-            write(logFd, recordLog, strlen(recordLog));
-        }
-        sleep(2);
-    }
-    // libero il binario precedente alla stazione
-    flagFile[0] = '0';
-    lseek(fdMaPrecedente, SEEK_SET, 0);
-    write(fdMaPrecedente, flagFile, 1);
-    close(fdMaPrecedente);
+    int fdMa;
+    time_t date;
     date = time(NULL);
-    sprintf(recordLog, "[ATTUALE: S%d], [NEXT: --], %s", itinerario[i], ctime(&date));
-    write(logFd, recordLog, strlen(recordLog));
-    close(logFd);
+
+    sprintf (fileMa,"./directoryMA/MA%02d",itinerario[i]);
+    fdMa = open(fileMa, O_RDWR);
+    read(fdMa, flagFile, 1);
+    if(flagFile[0] == '0')  // binario libero
+    {
+        flagFile[0] = '1';
+        lseek(fdMa, SEEK_SET, 0);
+        write(fdMa, flagFile, 1);
+        if(i != 1)  // se non e' il primo binario acceduto, libero il binario precedente
+        {
+            flagFile[0] = '0';
+            lseek(*fdMaPrecedente, SEEK_SET, 0);
+            write(*fdMaPrecedente, flagFile, 1);
+            close(*fdMaPrecedente);
+        }
+        if(itinerario[i+2] == -1)   // se la prossima tappa e' l'ultima stazione modifico il testo del recordLod
+            sprintf(recordLog, "[ATTUALE: MA%d], [NEXT: S%d], %s", itinerario[i], itinerario[i+1], ctime(&date));
+        else
+            sprintf(recordLog, "[ATTUALE: MA%d], [NEXT: MA%d], %s", itinerario[i], itinerario[i+1], ctime(&date));
+        write(logFd, recordLog, strlen(recordLog));
+        i++;
+        *fdMaPrecedente = dup(fdMa);
+        close(fdMa);
+    }
+    else    // binario occupato
+    {
+        sprintf(recordLog, "[ATTUALE: MA%d], [NEXT: MA%d], %s", itinerario[i-1], itinerario[i], ctime(&date));
+        write(logFd, recordLog, strlen(recordLog));
+    }
+    return i;
 }
 
-int treno(int id, int mappa)    // funzione che rappresenta i processi treni: prende come parametri l'id del treno e il tipo di mappa selezionata
+// funzione che si occupa della comunicazione tra il treno e il registro
+void trenoRegistro(int id, int mappa, int itinerario[20])
 {
     int trenoFd, serverLen, connessione, logFd;
     struct sockaddr_un indirizzoServer;
@@ -193,7 +172,6 @@ int treno(int id, int mappa)    // funzione che rappresenta i processi treni: pr
     } while (connessione == -1);
     char arg[3] = {id + '0', ' ', mappa + '0'};
     write(trenoFd, arg, 3);
-    int itinerario[20] = {0};  // inizializzo l'area di memoria a 0
     read(trenoFd, itinerario, 32);
 
     int i = 0;
@@ -205,26 +183,76 @@ int treno(int id, int mappa)    // funzione che rappresenta i processi treni: pr
     }
     printf("\n");
     close(trenoFd);
+}
 
-    viaggioTreno(id,itinerario);
+// funzione per l'inserimento del primo record nel file di log
+int inizializzazioneLogFile(int id, int itinerario[20])
+{
+    int logFd;
+    char fileLog[13];
+    sprintf (fileLog,"./log/T%1d.log",id);  // ogni treno crea il proprio file di log nella directory log
+    umask(000);
+    logFd = open(fileLog,O_RDWR|O_CREAT, 0666);
+
+    char recordLog[60] = {0};
+    time_t date;
+    date = time(NULL);
+    sprintf(recordLog, "[ATTUALE: S%d], [NEXT: MA%d], %s", itinerario[0], itinerario[1], ctime(&date));
+    write(logFd, recordLog, strlen(recordLog));
+    return logFd;
+}
+
+// funzione che aggiorna il file Ma corrispondente all'ultimo binario (viene reimpostato a 0 = libero) e scrittura dell'ultimo record nel file di log
+void rilascioUltimoBinario(int logFd, int fdMaPrecedente, int itinerario[20], int i)
+{
+    char flagFile[1] = {'0'};
+    char recordLog[60] = {0};
+    lseek(fdMaPrecedente, SEEK_SET, 0);
+    write(fdMaPrecedente, flagFile, 1);
+    close(fdMaPrecedente);
+    time_t date;
+    date = time(NULL);
+    sprintf(recordLog, "[ATTUALE: S%d], [NEXT: --], %s", itinerario[i], ctime(&date));
+    write(logFd, recordLog, strlen(recordLog));
+    close(logFd);
+}
+
+// funzione che rappresenta i processi treni in modalita' ETCS1
+int treno(int id, int mappa)
+{
+    int logFd;
+    int itinerario[20] = {0};  // inizializzo l'area di memoria a 0
+    trenoRegistro(id, mappa, itinerario);
+    logFd = inizializzazioneLogFile(id, itinerario);
+    int i = 1;
+    int fdMaPrecedente;
+
+    while(itinerario[i+1] != -1)
+    {
+        i = viaggio(itinerario, logFd, &fdMaPrecedente, i);
+        sleep(2);
+    }
+    // libero il binario precedente alla stazione
+    rilascioUltimoBinario(logFd, fdMaPrecedente, itinerario, i);
     return 0;
 }
 
-int controlloFile(int binario)  // controlla nel file MA corrispondente se effettivamente e' presente 0 (binario libero)
-{
-
-}
-
+// funzione che rappresenta i processi treni in modalita' ETCS2
 int trenoETCS2(int id, int mappa)
 {
-    int trenoFd, serverLen, connessione, logFd, risultatoControllo;
-    // buffer per la risposta dal server RBC, contiene: posizione attuale, prossima posizione, autorizzazione(0 = negata, 1 = concessa), flag se la prossima tappa e' una stazione
-    int rispostaRBC[4] = {0};
-    int infoTreno[2] = {id, 0};   // buffer che contiene l'id del treno e l'indice dell'iterazione
-    int binarioPrecedente;
-    char recordLog[60] = {0};
+    int itinerario[20] = {0};  // inizializzo l'area di memoria a 0
+    trenoRegistro(id, mappa, itinerario);
+    int logFd;
+    logFd = inizializzazioneLogFile(id, itinerario);
+    int i = 1;
+    int fdMaPrecedente;
+    int autorizzazione[1];
+    int buffer[2];  // contiene idTreno e lo step al quale il treno e' arrivato (variabile i)
+    int trenoFd, serverLen, connessione;
     struct sockaddr_un indirizzoServer;
     struct sockaddr* serverSockAddrPtr;
+    char recordLog[60] = {0};
+    time_t date;
 
     serverSockAddrPtr = (struct sockaddr*) &indirizzoServer;
     serverLen = sizeof (indirizzoServer);
@@ -241,62 +269,29 @@ int trenoETCS2(int id, int mappa)
         }
     } while (connessione == -1);
 
-    char fileLog[13];
-    sprintf (fileLog,"./log/T%1d.log",id);  // ogni treno crea il proprio file di log nella directory log
-    umask(000);
-    logFd = open(fileLog,O_RDWR|O_CREAT, 0666);
-    time_t date;
-    date = time(NULL);
-
-    while(rispostaRBC[1] != -1)
+    buffer[0] = id; 
+    while(itinerario[i+1] != -1)
     {
-        write(trenoFd, infoTreno, 8);
-        read(trenoFd, rispostaRBC, 16);
-        date = time(NULL);
-        if(rispostaRBC[2] == 1) // autorizzazione concessa
+        buffer[1] = i;
+        write(trenoFd, buffer, 8);
+        read(trenoFd, autorizzazione, 4);
+        if(autorizzazione[0] == 1)  // se RBC ha dato l'autorizzazione controllo che non ci sia una discordanza con il file MA corrispondente e scrivo nel file di log
+            i = viaggio(itinerario, logFd, &fdMaPrecedente, i);
+        else    // autorizzazione non concessa
         {
-            if(infoTreno[1] == 0)  // se sono nella stazione di partenza non controllo se nei file MA c'e' effettivamente il valore 0 (libero)
-            {
-                sprintf(recordLog, "[ATTUALE: S%d], [NEXT: MA%d], %s", rispostaRBC[0], rispostaRBC[1], ctime(&date));
-                infoTreno[1]++; // incremento l'indice dell'iterazione -> il treno si e' spostato
-            }
-            else if(rispostaRBC[1] == -1)   // se sono nella stazione di arrivo non controllo se nei file MA c'e' effettivamente il valore 0 (libero)
-            {
-                sprintf(recordLog, "[ATTUALE: S%d], [NEXT: --], %s", rispostaRBC[0], ctime(&date));
-            }
-            else
-                risultatoControllo = controlloFile(rispostaRBC[0]);
-            if(risultatoControllo == 1)
-            {
-                if(rispostaRBC[3] == 1) // la prossima e' una stazione
-                    sprintf(recordLog, "[ATTUALE: MA%d], [NEXT: S%d], %s", rispostaRBC[0], rispostaRBC[1], ctime(&date));
-                else
-                    sprintf(recordLog, "[ATTUALE: MA%d], [NEXT: MA%d], %s", rispostaRBC[0], rispostaRBC[1], ctime(&date));
-                infoTreno[1]++; // incremento l'indice dell'iterazione -> il treno si e' spostato
-                binarioPrecedente = rispostaRBC[0]; // aggiorno il binario precedente
-            }
-            else    // discordanza tra risposta RBC e boe: il treno rimane fermo
-            {
-                if(rispostaRBC[3] == 1) // la prossima e' una stazione
-                        sprintf(recordLog, "[ATTUALE: MA%d], [NEXT: S%d], %s", binarioPrecedente, rispostaRBC[0], ctime(&date));
-                    else
-                        sprintf(recordLog, "[ATTUALE: MA%d], [NEXT: MA%d], %s", binarioPrecedente, rispostaRBC[0], ctime(&date));   
-            }
+            date = time(NULL);
+            sprintf(recordLog, "[ATTUALE: MA%d], [NEXT: MA%d], %s", itinerario[i-1], itinerario[i], ctime(&date));
+            write(logFd, recordLog, strlen(recordLog));
         }
-        else
-        {
-            if(rispostaRBC[3] == 1) // la prossima e' una stazione
-                sprintf(recordLog, "[ATTUALE: MA%d], [NEXT: MA%d], %s", rispostaRBC[0], rispostaRBC[1], ctime(&date));
-        }
-        write(logFd, recordLog, strlen(recordLog));
         sleep(2);
     }
-    close(trenoFd);
-    close(logFd);
+    // libero il binario precedente alla stazione
+    rilascioUltimoBinario(logFd, fdMaPrecedente, itinerario, i);
     return 0;
 }
 
-int creazione_treni(int numTreni, int mappa, char *modalita)   // funzione che crea i processi treni in base alla mappa e alla modalita' selezionata
+// funzione che crea i processi treni in base alla mappa e alla modalita' selezionata
+int creazione_treni(int numTreni, int mappa, char *modalita)
 {
     if(strcmp(modalita, ETCS1) == 0)   // modalita' ETCS1
     {
@@ -323,6 +318,7 @@ int creazione_treni(int numTreni, int mappa, char *modalita)   // funzione che c
     return 0;
 }
 
+// funzione per creare la directory per i file MA e la directory per i file di log
 int creazioneDirectory(char nome[16])
 {
     char rm[23];
