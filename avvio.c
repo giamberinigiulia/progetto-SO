@@ -82,8 +82,10 @@ int registro(char *inputMappa)
     printf ("In ascolto.\n");
 
 
-    for(int i=0;i<countTreni;i++)
+    while(1)
     {
+        //socket_descrittore = socket (AF_UNIX, SOCK_STREAM, DEFAULT_PROTOCOL);
+        printf("CREATO NUOVO SOCKET PER CLIENT\n");
         int clientLen = sizeof(client);
         socket_client = accept(socket_descrittore, (struct sockaddr *)&client, &clientLen);
         if(fork() == 0)
@@ -146,6 +148,7 @@ int viaggio(int itinerario[20], int logFd, int *fdMaPrecedente, int i)
         sprintf(recordLog, "[ATTUALE: MA%d], [NEXT: MA%d], %s", itinerario[i-1], itinerario[i], ctime(&date));
         write(logFd, recordLog, strlen(recordLog));
     }
+    //printf("I prima del ritorno da Viaggio: %d\n",i);
     return i;
 }
 
@@ -259,34 +262,43 @@ int trenoETCS2(int id, int mappa)
     trenoFd = socket (AF_UNIX, SOCK_STREAM, DEFAULT_PROTOCOL);
     indirizzoServer.sun_family = AF_UNIX;
     strcpy (indirizzoServer.sun_path, "serverRBC");
-    do
-    {
-        connessione = connect (trenoFd, serverSockAddrPtr, serverLen);
-        if (connessione == -1)
-        {
-            printf("Connessione non riuscita: riprovo in 1 secondo\n");
-            sleep (1);
-        }
-    } while (connessione == -1);
 
     buffer[0] = id; 
     while(itinerario[i+1] != -1)
     {
+        trenoFd = socket (AF_UNIX, SOCK_STREAM, DEFAULT_PROTOCOL);
+        indirizzoServer.sun_family = AF_UNIX;
+        do
+        {
+            connessione = connect (trenoFd, serverSockAddrPtr, serverLen);
+            if (connessione == -1)
+            {
+                printf("Connessione non riuscita: riprovo in 1 secondo\n");
+                sleep (1);
+            }
+        } while (connessione == -1);
+
         buffer[1] = i;
         write(trenoFd, buffer, 8);
         read(trenoFd, autorizzazione, 4);
+
         if(autorizzazione[0] == 1)  // se RBC ha dato l'autorizzazione controllo che non ci sia una discordanza con il file MA corrispondente e scrivo nel file di log
+        {
             i = viaggio(itinerario, logFd, &fdMaPrecedente, i);
+        }
         else    // autorizzazione non concessa
         {
             date = time(NULL);
             sprintf(recordLog, "[ATTUALE: MA%d], [NEXT: MA%d], %s", itinerario[i-1], itinerario[i], ctime(&date));
             write(logFd, recordLog, strlen(recordLog));
         }
+        close(trenoFd);
         sleep(2);
     }
     // libero il binario precedente alla stazione
     rilascioUltimoBinario(logFd, fdMaPrecedente, itinerario, i);
+    close(trenoFd);
+    exit(0);
     return 0;
 }
 
@@ -377,25 +389,9 @@ int main(int argc, char *param[])
             padre_treni(mappaSelezionata, ETCS1);
         }
     }
-    else if(strcmp(param[1],ETCS2)==0) //ETCS2
+    else
     {
-        if(strcmp(param[2],MAPPA1)==0) //MAPPA1
-        {
-            mappaSelezionata = MAPPA1;
-        }
-        else if(strcmp(param[2],MAPPA2)==0) //MAPPA2
-        {
-            mappaSelezionata = MAPPA2;
-        }
-        if(fork() == 0)
-        {
-            registro(mappaSelezionata);
-        }
-        else if(fork() == 0)
-        {
-            padre_treni(mappaSelezionata, ETCS2);
-        }
-        else if(strcmp(param[2],RBC)==0) //RBC
+        if(strcmp(param[2],RBC)==0) //RBC
         {
             if(argc<4) 
                 error();
@@ -412,11 +408,31 @@ int main(int argc, char *param[])
                 execl("./RBC", "RBC", mappaSelezionata, NULL);  // avvio del server RBC con parametro la mappa selezionata
                 exit(0);
             }
+        } else if(strcmp(param[1],ETCS2)==0) //ETCS2
+        {
+            if(strcmp(param[2],MAPPA1)==0) //MAPPA1
+            {
+                mappaSelezionata = MAPPA1;
+            }
+            else if(strcmp(param[2],MAPPA2)==0) //MAPPA2
+            {
+                mappaSelezionata = MAPPA2;
+            }
+            if(fork() == 0)
+            {
+                registro(mappaSelezionata);
+                exit(0);
+            }
+            else if(fork() == 0)
+            {
+                padre_treni(mappaSelezionata, ETCS2);
+                exit(0);
+            }
         }
-    }
-    else
-    {
-        error();
+        else
+        {
+            error();
+        }
     }
     return 0;
 }
