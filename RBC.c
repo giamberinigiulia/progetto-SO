@@ -20,8 +20,65 @@
 #define TRENI_MAPPA2 5
 #define DEFAULT_PROTOCOL 0
 
+/*void checkAutorizzazione(int buffer[3], int socket_client, int* MAs[16], int* Stazioni[8], int* itinerari[5][8])
+{
+    int auth[1] = {1};
+    int idTreno = buffer[0] - 1;
+    int posizioneSuccessiva = buffer[1];
+    int binAttuale = itinerari[idTreno][posizioneSuccessiva-1]-1;
+    int binSuccessivo = itinerari[idTreno][posizioneSuccessiva]-1;
+    printf("Segmento Attuale: %d\n", binAttuale);
+    printf("Segmento Successivo: %d\n", binSuccessivo);
+    
+    if(posizioneSuccessiva == 1 && MAs[binSuccessivo] == 0)
+    {
+        //sono in una stazione attualmente, la lascio e entronel segmento successivo
+        Stazioni[binAttuale]--;
+        MAs[binSuccessivo] = 1;
+    }
+    else if(itinerari[idTreno][posizioneSuccessiva+1]==-1)
+    {
+        //sono nell'ultimo binario, accedo alla stazione
+        MAs[binAttuale] = 0;
+        Stazioni[binSuccessivo]++;
+    }
+    else if(MAs[binSuccessivo] == 0)
+    {
+        //situazione da binario a binario
+        MAs[binAttuale] = 0;
+        MAs[binSuccessivo] = 1;
+    }
+    else
+    { 
+        auth[0] = 0; 
+    }
+    stampa(MAs,Stazioni);
+
+    write(socket_client, auth, 4);
+    printf("Treno %d si trova nella posizione %d, ovvero nel segmento di binario %d e vuole andare nella posizione %d, cioè nel segmento %d\n",idTreno,posizioneSuccessiva-1, itinerari[idTreno][posizioneSuccessiva-1],posizioneSuccessiva, itinerari[idTreno][posizioneSuccessiva]);
+    printf("--------------------------------\n");
+    close(socket_client);
+    exit(0);
+}*/
+
+void stampa(int MAs[16], int Stazioni[8])
+{
+    printf("--------------------------------\n");
+    for(int i=0;i<8;i++)
+    {
+        printf("Stazione[%d] = %d\n",i, Stazioni[i]);
+    }
+    printf("--------------------------------\n");
+    for(int i=0;i<16;i++)
+    {
+        printf("MAs[%d] = %d\n",i, MAs[i]);
+    }
+    printf("--------------------------------\n");
+}
+
 int main(int argc, char* argv[])
 {
+    /*RBC CLIENT*/
     int mappa = 0;
     if (strcmp(argv[1],"MAPPA1")==0)
         mappa = 1;
@@ -38,12 +95,13 @@ int main(int argc, char* argv[])
     
     char arg[3] = {'0', ' ' , '0'};
     int itinerario[20] = {0};
-    for(int i = 0; i<20;i++)
+    /*for(int i = 0; i < 20;i++)
     {
         printf("%d ",itinerario[i]);
-    }
-    printf("\n");
-    for(int i = 0; i < 4 ; i++)
+    }*/
+    printf("\nMappa: %d\n",mappa);
+
+    for(int i = 0; i < (mappa+3); i++)
     {
         clientRBCFd = socket (AF_UNIX, SOCK_STREAM, DEFAULT_PROTOCOL);
         indirizzoServer.sun_family = AF_UNIX;
@@ -54,29 +112,150 @@ int main(int argc, char* argv[])
         arg[2] = mappa + '0';
         
         write(clientRBCFd, arg, 3);
-        read(clientRBCFd, itinerari[i], 32);    
-        /*
-        for(int j=0;itinerario[j]!=0;j++)
+        read(clientRBCFd, itinerari[i], 32);       
+        /*for(int j=0;itinerario[j]!=0;j++)
         {
             itinerari[i][j] = itinerario[j];
-        }
-        for(int k = 0; k <10 ; k++)
-        {
-            printf("%d ",itinerari[i][k]);
-            if(itinerari[i][k] == -1) k = 10;
-        }
-        printf("\n");*/
+        }*/
     }
-    close(clientRBCFd);
-
-    /*for(int i=0;i<4;i++)
+    for(int i=0;i<(mappa+3);i++)
     {
         int k=0;
-        while(itinerari[i][k]!=-1)
+        while(itinerari[i][k]!=-1) 
         {
-            printf("%d ", itinerari[i][k]);
+            printf("%d ",itinerari[i][k]);
             k++;
         }
-        printf("\n----------------------------------------------------\n");
-    }*/
+        printf("\n");
+    }
+    printf("\n");
+    
+    close(clientRBCFd);
+
+
+    /*RBC SERVER*/
+    int socket_descrittore; // Variabile che contiene il descrittore per il socket che andremo a creare
+    int socket_client, len; // Socket del client e dimensione della struttura del socket
+    struct sockaddr_un serverRBC; // Struttura che contiene i dettagli del server
+    struct sockaddr_un client;
+    int *risposta;
+    int buffer[3];
+
+    socket_descrittore = socket (AF_UNIX, SOCK_STREAM, DEFAULT_PROTOCOL);
+    if (socket_descrittore == -1) 
+    {
+        printf ("Errore di creazione socket.\n");
+        return 1;
+    }
+
+    serverRBC.sun_family = AF_UNIX;
+    strcpy(serverRBC.sun_path, "serverRBC");
+    unlink("serverRBC");
+    bind (socket_descrittore, (struct sockaddr *)&serverRBC, sizeof (serverRBC));
+
+    listen (socket_descrittore, 15);
+    printf ("In ascolto.\n");
+
+
+    //Strutture dati RBC
+
+    int MAs[16] = {0};
+    int Stazioni[8] = {0};
+
+    for(int i=0;i<mappa+3; i++)
+    {
+        Stazioni[itinerari[i][0]-1] = 1;
+    }
+
+    for(int i=0;i<8;i++)
+    {
+        printf("Stazione[%d] = %d\n",i, Stazioni[i]);
+    }
+    printf("--------------------------------\n");
+
+    while(1)
+    {
+        int clientLen = sizeof(client);
+        socket_client = accept(socket_descrittore, (struct sockaddr *)&client, &clientLen);
+        if(fork() == 0)
+        {
+            printf ("Connessione in arrivo.\n");
+
+            read(socket_client, buffer, 12);
+            printf("Ricezione: %d - %d\n",buffer[0], buffer[1]);
+                        
+            //buffer[0] --> id
+            //buffer[1] --> posizione successiva
+            
+            //checkAutorizzazione(buffer,socket_client, MAs, Stazioni, itinerari);
+
+            int auth[1] = {1};
+            int idTreno = buffer[0] - 1;
+            int posizioneSuccessiva = buffer[1];
+            int binAttuale = itinerari[idTreno][posizioneSuccessiva-1]-1;
+            int binSuccessivo = itinerari[idTreno][posizioneSuccessiva]-1;
+            printf("Segmento Attuale: %d\n", binAttuale);
+            printf("Segmento Successivo: %d\n", binSuccessivo);
+            
+            if(posizioneSuccessiva == 1 && MAs[binSuccessivo] == 0)
+            {
+                //sono in una stazione attualmente, la lascio e entronel segmento successivo
+                Stazioni[binAttuale]--;
+                MAs[binSuccessivo] = 1;
+            }
+            else if(itinerari[idTreno][posizioneSuccessiva+1]==-1)
+            {
+                //sono nell'ultimo binario, accedo alla stazione
+                MAs[binAttuale] = 0;
+                Stazioni[binSuccessivo]++;
+            }
+            else if(MAs[binSuccessivo] == 0)
+            {
+                //situazione da binario a binario
+                MAs[binAttuale] = 0;
+                MAs[binSuccessivo] = 1;
+            }
+            else
+            { 
+                auth[0] = 0; 
+            }
+            stampa(MAs,Stazioni);
+
+            write(socket_client, auth, 4);
+            printf("Treno %d si trova nella posizione %d, ovvero nel segmento di binario %d e vuole andare nella posizione %d, cioè nel segmento %d\n",idTreno,posizioneSuccessiva-1, itinerari[idTreno][posizioneSuccessiva-1],posizioneSuccessiva, itinerari[idTreno][posizioneSuccessiva]);
+            printf("--------------------------------\n");
+            close(socket_client);
+            exit(0);
+        }
+        else 
+        {
+            close(socket_client);
+        }
+        
+    }
+    close(socket_client);
+    close(socket_descrittore);
+    unlink("serverRBC");
+    exit(0);
+    return 0;
+
+    /*printf("Stazioni: \n");
+    for(int i=0;i<8;i++)
+    {
+        printf("%d ", Stazioni[i]);
+    }
+    printf("\n");
+
+    printf("Segmenti binari: \n");
+    for(int i=0;i<16;i++)
+    {
+        printf("%d ", MAs[i]);
+    }
+    printf("\n");*/
+
+}
+
+void check(int b[3], int* binari)
+{
+    //if()
 }
