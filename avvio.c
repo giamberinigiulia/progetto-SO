@@ -30,7 +30,7 @@ void itinerario(char buffer[100], int socket_client)
     int mappa1 [4][8]=
     {
         {1,1,2,3,8,6,-1},
-        {2,5,6,7,3,4,5,-1}, 
+        {2,5,6,7,3,4,5,-1},
         {7,13,12,11,10,9,3,-1}, 
         {4,14,15,16,12,8,-1}
     };
@@ -264,6 +264,7 @@ int trenoETCS2(int id, int mappa)
     strcpy (indirizzoServer.sun_path, "serverRBC");
 
     buffer[0] = id; 
+    //while(itinerario[i+1] != -1)
     while(itinerario[i+1] != -1)
     {
         trenoFd = socket (AF_UNIX, SOCK_STREAM, DEFAULT_PROTOCOL);
@@ -281,7 +282,6 @@ int trenoETCS2(int id, int mappa)
         buffer[1] = i;
         write(trenoFd, buffer, 8);
         read(trenoFd, autorizzazione, 4);
-
         if(autorizzazione[0] == 1)  // se RBC ha dato l'autorizzazione controllo che non ci sia una discordanza con il file MA corrispondente e scrivo nel file di log
         {
             i = viaggio(itinerario, logFd, &fdMaPrecedente, i);
@@ -294,6 +294,7 @@ int trenoETCS2(int id, int mappa)
         }
         close(trenoFd);
         sleep(2);
+        
     }
     // libero il binario precedente alla stazione
     rilascioUltimoBinario(logFd, fdMaPrecedente, itinerario, i);
