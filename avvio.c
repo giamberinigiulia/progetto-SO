@@ -297,6 +297,20 @@ int trenoETCS2(int id, int mappa)
         
     }
     // libero il binario precedente alla stazione
+
+    trenoFd = socket (AF_UNIX, SOCK_STREAM, DEFAULT_PROTOCOL);
+    indirizzoServer.sun_family = AF_UNIX;
+    do
+    {
+        connessione = connect (trenoFd, serverSockAddrPtr, serverLen);
+        if (connessione == -1)
+        {
+            printf("Connessione non riuscita: riprovo in 1 secondo\n");
+            sleep (1);
+        }
+    } while (connessione == -1);
+    buffer[1]=i;
+    write(trenoFd,buffer,8);
     rilascioUltimoBinario(logFd, fdMaPrecedente, itinerario, i);
     close(trenoFd);
     exit(0);
