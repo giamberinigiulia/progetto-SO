@@ -23,9 +23,17 @@
 #define TRENI_MAPPA2 5
 #define DEFAULT_PROTOCOL 0
 
+int countEndTreni = 0;
+pid_t pidFather;
+
 void error()
 {
     printf("Errore nell'inserimento dei parametri\n");
+}
+
+void handler(int signalNum)
+{
+    countEndTreni++;
 }
 
 // funzione che rappresenta i processi treni in modalita' ETCS1
@@ -45,6 +53,9 @@ int trenoETCS1(int id, int mappa)
     }
     // libero il binario precedente alla stazione
     rilascioUltimoBinario(logFd, fdMaPrecedente, itinerario, i);
+
+    kill(getppid(),SIGUSR1);
+    pause();
     return 0;
 }
 
@@ -121,35 +132,55 @@ int trenoETCS2(int id, int mappa)
     write(trenoFd,buffer,8);
     rilascioUltimoBinario(logFd, fdMaPrecedente, itinerario, i);
     close(trenoFd);
-    exit(0);
+
+    kill(getppid(),SIGUSR1);
+    pause();
+
     return 0;
 }
 
 // funzione che crea i processi treni in base alla mappa e alla modalita' selezionata
 int creazione_treni(int numTreni, int mappa, char *modalita)
 {
+    int child_pids[5] = {0};
     if(strcmp(modalita, ETCS1) == 0)   // modalita' ETCS1
     {
         for(int i = 1; i <= numTreni; i++)
         {
-            if(fork() == 0)
+            child_pids[i-1] = fork();
+            if(child_pids[i-1] == 0)
             {
                 trenoETCS1(i, mappa);   // ad ogni treno viene passato il proprio id
-                exit(0);
+                //exit(0);
             }
         }
+
     }
     else    // modalita ETCS2
     {
         for(int i = 1; i <= numTreni; i++)
         {
-            if(fork() == 0)
+            child_pids[i-1] = fork();
+            if(child_pids[i-1] == 0)
             {
                 trenoETCS2(i, mappa);   // ad ogni treno viene passato il proprio id
-                exit(0);
+                //exit(0);
             }
         }
     }
+    time_t date;
+    date = time(NULL);
+    printf("%s\n",ctime(&date));
+    do{}while((countEndTreni!=TRENI_MAPPA1 && mappa == 1)||(countEndTreni!=TRENI_MAPPA2 && mappa==2));
+    for(int i=0;i<countEndTreni;i++)
+    {
+        printf("Children %d: %d\n",i,child_pids[i]);
+        kill(child_pids[i],SIGKILL);
+    }
+    date = time(NULL);
+    printf("%s\n",ctime(&date));
+    kill(pidFather,SIGKILL);
+    kill(getpid(),SIGKILL);
     return 0;
 }
 
@@ -168,6 +199,9 @@ int creazioneDirectory(char nome[19])
 // funzione che crea la directory per i file MAx, la directory per i file log e i processi treni: prende come argomento la mappa selezionata e il tipo di modalita'
 int padre_treni(char *mappa, char *modalita)
 {
+    if (signal(SIGUSR1, handler) == SIG_ERR) //attacco handler
+        printf("errore\n");
+    
     int fd;
     creazioneDirectory("../log");
     creazioneDirectory("../directoryMA");
@@ -186,6 +220,7 @@ int padre_treni(char *mappa, char *modalita)
     {
         creazione_treni(TRENI_MAPPA2, 2, modalita);
     }
+    
     return 0;
 }
 
@@ -206,10 +241,12 @@ int main(int argc, char *param[])
         }
         if(fork() == 0)
         {
+            pidFather=getpid();
             registro(mappaSelezionata);
         }
         else if(fork() == 0)
         {
+            printf("\n babo %d\n",getpid());
             padre_treni(mappaSelezionata, ETCS1);
         }
     }

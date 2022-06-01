@@ -95,6 +95,6 @@ int registro(char *inputMappa)
     close(socket_client);
     close(socket_server);
     unlink("serverRegistro");
-    exit(0);
+    pause();
     return 0;
 }
