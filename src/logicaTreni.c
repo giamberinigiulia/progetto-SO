@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <time.h>
+#include <sys/file.h>
 
 #include "logicaTreni.h"
 
@@ -27,12 +28,14 @@ int viaggio(int itinerario[20], int logFd, int *fdMaPrecedente, int i)
 
     sprintf (fileMa,"../directoryMA/MA%02d",itinerario[i]);
     fdMa = open(fileMa, O_RDWR);
+    flock(fdMa, LOCK_EX);   // lock sul file
     read(fdMa, flagFile, 1);
     if(flagFile[0] == '0')  // binario libero
     {
         flagFile[0] = '1';
         lseek(fdMa, SEEK_SET, 0);
         write(fdMa, flagFile, 1);
+        flock(fdMa, LOCK_UN); // rilascio il lock sul file
         if(i != 1)  // se non e' il primo binario acceduto, libero il binario precedente
         {
             flagFile[0] = '0';
@@ -53,6 +56,7 @@ int viaggio(int itinerario[20], int logFd, int *fdMaPrecedente, int i)
     {
         sprintf(recordLog, "[ATTUALE: MA%d], [NEXT: MA%d], %s", itinerario[i-1], itinerario[i], ctime(&date));
         write(logFd, recordLog, strlen(recordLog));
+        flock(fdMa, LOCK_UN); // rilascio il lock sul file
     }
     //printf("I prima del ritorno da Viaggio: %d\n",i);
     return i;

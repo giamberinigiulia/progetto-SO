@@ -24,7 +24,7 @@
 #define DEFAULT_PROTOCOL 0
 
 int countEndTreni = 0;
-pid_t pidFather;
+pid_t pidRegistro;
 
 void error()
 {
@@ -115,8 +115,7 @@ int trenoETCS2(int id, int mappa)
         sleep(2);
         
     }
-    // libero il binario precedente alla stazione
-
+    // richiesta di accesso alla stazione di arrivo
     trenoFd = socket (AF_UNIX, SOCK_STREAM, DEFAULT_PROTOCOL);
     indirizzoServer.sun_family = AF_UNIX;
     do
@@ -130,6 +129,7 @@ int trenoETCS2(int id, int mappa)
     } while (connessione == -1);
     buffer[1]=i;
     write(trenoFd,buffer,8);
+    // libero il binario precedente alla stazione
     rilascioUltimoBinario(logFd, fdMaPrecedente, itinerario, i);
     close(trenoFd);
 
@@ -171,16 +171,17 @@ int creazione_treni(int numTreni, int mappa, char *modalita)
     time_t date;
     date = time(NULL);
     printf("%s\n",ctime(&date));
-    do{}while((countEndTreni!=TRENI_MAPPA1 && mappa == 1)||(countEndTreni!=TRENI_MAPPA2 && mappa==2));
+
+    while((countEndTreni!=TRENI_MAPPA1 && mappa == 1)||(countEndTreni!=TRENI_MAPPA2 && mappa==2));
+
     for(int i=0;i<countEndTreni;i++)
     {
         printf("Children %d: %d\n",i,child_pids[i]);
-        kill(child_pids[i],SIGKILL);
+        kill(child_pids[i],SIGINT);
     }
     date = time(NULL);
     printf("%s\n",ctime(&date));
-    kill(pidFather,SIGKILL);
-    kill(getpid(),SIGKILL);
+    kill(pidRegistro,SIGINT);
     return 0;
 }
 
@@ -241,7 +242,7 @@ int main(int argc, char *param[])
         }
         if(fork() == 0)
         {
-            pidFather=getpid();
+            pidRegistro=getpid();
             registro(mappaSelezionata);
         }
         else if(fork() == 0)

@@ -85,6 +85,7 @@ int registro(char *inputMappa)
             read(socket_client, buffer_ricezione, 100);
             printf("Ricezione: %s\n",buffer_ricezione);
             itinerario(buffer_ricezione, socket_client);
+            exit(0);
         }
         else 
         {
@@ -95,6 +96,5 @@ int registro(char *inputMappa)
     close(socket_client);
     close(socket_server);
     unlink("serverRegistro");
-    pause();
     return 0;
 }
