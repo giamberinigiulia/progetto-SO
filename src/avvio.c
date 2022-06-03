@@ -176,7 +176,9 @@ int creazione_treni(int numTreni, int mappa, char *modalita)
     time_t date;
     date = time(NULL);
     printf("%s\n",ctime(&date));
+
     while((countEndTreni!=TRENI_MAPPA1 && mappa == 1)||(countEndTreni!=TRENI_MAPPA2 && mappa==2));
+
     for(int i=0;i<countEndTreni;i++)
     {
         printf("Children %d: %d\n",i,child_pids[i]);
@@ -186,20 +188,19 @@ int creazione_treni(int numTreni, int mappa, char *modalita)
     printf("%s\n",ctime(&date));
 
     printf("Tutti i treni hanno terminato la loro missione...\n");
-    int fdPid = open ("pidRBC.txt", O_RDWR);
-    int pidRbc;
-    read(fdPid, &pidRbc, 4);
-    close(fdPid);
-    printf("QUI %d\n",pidRbc);
     if(strcmp(modalita, ETCS2)==0)
     {
-        kill(pidRbc,SIGUSR2);
+        // leggo il pid di RBC dal file
+        FILE *fdPid = fopen("pidRBC.txt", "r");
+        int pidRbc;
+        fscanf(fdPid, "%d", &pidRbc);
+        fclose(fdPid);
+        printf("QUI %d\n",pidRbc);
+        kill(pidRbc, SIGUSR2);
         unlink("serverRBC");
-        kill(pidRbc, SIGINT);
     }
     unlink("serverRegistro");
-    kill(pidRegistro,SIGINT);
-    kill(getpid(),SIGINT);
+    kill(pidRegistro, SIGINT);  // termino l'esecuzione del registro
     return 0;
 }
 
