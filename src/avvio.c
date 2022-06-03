@@ -25,6 +25,7 @@
 
 int countEndTreni = 0;
 pid_t pidRegistro;
+pid_t pidRBC;
 
 void error()
 {
@@ -34,6 +35,7 @@ void error()
 void handler(int signalNum)
 {
     countEndTreni++;
+    printf("Counter: %d\n",countEndTreni);
 }
 
 // funzione che rappresenta i processi treni in modalita' ETCS1
@@ -49,6 +51,7 @@ int trenoETCS1(int id, int mappa)
     while(itinerario[i+1] != -1)
     {
         i = viaggio(itinerario, logFd, &fdMaPrecedente, i);
+        printf("Treno %d richiede autorizzazione\n",id);
         sleep(2);
     }
     // libero il binario precedente alla stazione
@@ -81,7 +84,6 @@ int trenoETCS2(int id, int mappa)
     trenoFd = socket (AF_UNIX, SOCK_STREAM, DEFAULT_PROTOCOL);
     indirizzoServer.sun_family = AF_UNIX;
     strcpy (indirizzoServer.sun_path, "serverRBC");
-
     buffer[0] = id; 
     //while(itinerario[i+1] != -1)
     while(itinerario[i+1] != -1)
@@ -100,13 +102,16 @@ int trenoETCS2(int id, int mappa)
 
         buffer[1] = i;
         write(trenoFd, buffer, 8);
+        printf("Treno %d richiede autorizzazione... ",id);
         read(trenoFd, autorizzazione, 4);
         if(autorizzazione[0] == 1)  // se RBC ha dato l'autorizzazione controllo che non ci sia una discordanza con il file MA corrispondente e scrivo nel file di log
         {
+            printf(" autorizzazione concessa\n");
             i = viaggio(itinerario, logFd, &fdMaPrecedente, i);
         }
         else    // autorizzazione non concessa
         {
+            printf(" autorizzazione non concessa\n");
             date = time(NULL);
             sprintf(recordLog, "[ATTUALE: MA%d], [NEXT: MA%d], %s", itinerario[i-1], itinerario[i], ctime(&date));
             write(logFd, recordLog, strlen(recordLog));
@@ -115,7 +120,8 @@ int trenoETCS2(int id, int mappa)
         sleep(2);
         
     }
-    // richiesta di accesso alla stazione di arrivo
+    // libero il binario precedente alla stazione
+
     trenoFd = socket (AF_UNIX, SOCK_STREAM, DEFAULT_PROTOCOL);
     indirizzoServer.sun_family = AF_UNIX;
     do
@@ -129,10 +135,9 @@ int trenoETCS2(int id, int mappa)
     } while (connessione == -1);
     buffer[1]=i;
     write(trenoFd,buffer,8);
-    // libero il binario precedente alla stazione
     rilascioUltimoBinario(logFd, fdMaPrecedente, itinerario, i);
+    printf("Treno %d ha terminato la sua missione\n",id);
     close(trenoFd);
-
     kill(getppid(),SIGUSR1);
     pause();
 
@@ -171,9 +176,7 @@ int creazione_treni(int numTreni, int mappa, char *modalita)
     time_t date;
     date = time(NULL);
     printf("%s\n",ctime(&date));
-
     while((countEndTreni!=TRENI_MAPPA1 && mappa == 1)||(countEndTreni!=TRENI_MAPPA2 && mappa==2));
-
     for(int i=0;i<countEndTreni;i++)
     {
         printf("Children %d: %d\n",i,child_pids[i]);
@@ -181,7 +184,22 @@ int creazione_treni(int numTreni, int mappa, char *modalita)
     }
     date = time(NULL);
     printf("%s\n",ctime(&date));
+
+    printf("Tutti i treni hanno terminato la loro missione...\n");
+    int fdPid = open ("pidRBC.txt", O_RDWR);
+    int pidRbc;
+    read(fdPid, &pidRbc, 4);
+    close(fdPid);
+    printf("QUI %d\n",pidRbc);
+    if(strcmp(modalita, ETCS2)==0)
+    {
+        kill(pidRbc,SIGUSR2);
+        unlink("serverRBC");
+        kill(pidRbc, SIGINT);
+    }
+    unlink("serverRegistro");
     kill(pidRegistro,SIGINT);
+    kill(getpid(),SIGINT);
     return 0;
 }
 
@@ -242,12 +260,11 @@ int main(int argc, char *param[])
         }
         if(fork() == 0)
         {
-            pidRegistro=getpid();
+            pidRegistro = getpid();
             registro(mappaSelezionata);
         }
         else if(fork() == 0)
         {
-            printf("\n babo %d\n",getpid());
             padre_treni(mappaSelezionata, ETCS1);
         }
     }
@@ -267,8 +284,9 @@ int main(int argc, char *param[])
             }
             if(fork() == 0)
             {
+                pidRBC = getpid();
+                printf("pid rbc: %d\n",pidRBC);
                 execl("./RBC", "RBC", mappaSelezionata, NULL);  // avvio del server RBC con parametro la mappa selezionata
-                exit(0);
             }
         } else if(strcmp(param[1],ETCS2)==0) //ETCS2
         {
@@ -282,13 +300,12 @@ int main(int argc, char *param[])
             }
             if(fork() == 0)
             {
+                pidRegistro = getpid();
                 registro(mappaSelezionata);
-                exit(0);
             }
             else if(fork() == 0)
             {
                 padre_treni(mappaSelezionata, ETCS2);
-                exit(0);
             }
         }
         else

@@ -20,6 +20,15 @@
 #define TRENI_MAPPA2 5
 #define DEFAULT_PROTOCOL 0
 
+int flag=0;
+
+void handlerRBC(int signalNum)
+{
+    flag = 1;
+    printf("Counter: %d\n",flag);
+}
+
+
 char* checkAutorizzazione(int buffer[3], int socket_client, int MAs[16], int Stazioni[8], int itinerari[5][8])
 {
     time_t date;
@@ -127,6 +136,9 @@ void RBCclient(int mappa, int itinerari[5][8])
 
 void RBCserver(int mappa, int itinerari[5][8])
 {
+    if (signal(SIGUSR2, handlerRBC) == SIG_ERR) //attacco handler
+        printf("errore\n");
+    if(signal(SIGINT,SIG_IGN) == SIG_ERR) printf("errore\n");
     int logFd;
     char fileLog[16]={"../log/RBC.log"};
     //sprintf (fileLog,"./log/RBC.log");  // ogni treno crea il proprio file di log nella directory log
@@ -167,7 +179,7 @@ void RBCserver(int mappa, int itinerari[5][8])
         Stazioni[itinerari[i][0]-1] = 1;
     }
 
-    while(1)
+    while(flag == 0)
     {
         //socket_server = socket (AF_UNIX, SOCK_STREAM, DEFAULT_PROTOCOL);
         //printf("SOno nel while\n");
@@ -190,17 +202,23 @@ void RBCserver(int mappa, int itinerari[5][8])
         {
             close(socket_client);
         }
-        
     }
+    printf("flag: %d\n",flag);
     close(logFd);
     close(socket_client);
     close(socket_server);
     printf("Chiusura canale di comunicazione.\n");
     unlink("serverRBC");
+    exit(0);
 }
 
 int main(int argc, char* argv[])
 {
+    int fdPid = open ("pidRBC.txt", O_RDWR|O_CREAT, 0666);
+    pid_t pid = getpid();
+    printf("pid: %d\n",pid);
+    write(fdPid, &pid, sizeof(pid));
+    close(fdPid);
     /*RBC CLIENT*/
     int mappa = 0;
     if (strcmp(argv[1],MAPPA1)==0)
