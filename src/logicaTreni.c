@@ -58,7 +58,6 @@ int viaggio(int itinerario[20], int logFd, int *fdMaPrecedente, int i)
         write(logFd, recordLog, strlen(recordLog));
         flock(fdMa, LOCK_UN); // rilascio il lock sul file
     }
-    //printf("I prima del ritorno da Viaggio: %d\n",i);
     return i;
 }
 

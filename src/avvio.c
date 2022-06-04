@@ -27,15 +27,14 @@ int countEndTreni = 0;
 pid_t pidRegistro;
 pid_t pidRBC;
 
-void error()
+void error() //gestione errore inserimento parametri
 {
     printf("Errore nell'inserimento dei parametri\n");
 }
 
-void handler(int signalNum)
+void handler(int signalNum) //handler gestione segnali SIGUSR1
 {
     countEndTreni++;
-    printf("Counter: %d\n",countEndTreni);
 }
 
 // funzione che rappresenta i processi treni in modalita' ETCS1
@@ -43,7 +42,7 @@ int trenoETCS1(int id, int mappa)
 {
     int logFd;
     int itinerario[20] = {0};  // inizializzo l'area di memoria a 0
-    trenoRegistro(id, mappa, itinerario);
+    trenoRegistro(id, mappa, itinerario); //gestione comunicazione treno-registro
     logFd = inizializzazioneLogFile(id, itinerario);
     int i = 1;
     int fdMaPrecedente;
@@ -66,7 +65,7 @@ int trenoETCS1(int id, int mappa)
 int trenoETCS2(int id, int mappa)
 {
     int itinerario[20] = {0};  // inizializzo l'area di memoria a 0
-    trenoRegistro(id, mappa, itinerario);
+    trenoRegistro(id, mappa, itinerario); //gestione comunicazione treno-registro
     int logFd;
     logFd = inizializzazioneLogFile(id, itinerario);
     int i = 1;
@@ -82,13 +81,14 @@ int trenoETCS2(int id, int mappa)
     serverSockAddrPtr = (struct sockaddr*) &indirizzoServer;
     serverLen = sizeof (indirizzoServer);
     trenoFd = socket (AF_UNIX, SOCK_STREAM, DEFAULT_PROTOCOL);
+    
     indirizzoServer.sun_family = AF_UNIX;
     strcpy (indirizzoServer.sun_path, "serverRBC");
     buffer[0] = id; 
-    //while(itinerario[i+1] != -1)
+
     while(itinerario[i+1] != -1)
     {
-        trenoFd = socket (AF_UNIX, SOCK_STREAM, DEFAULT_PROTOCOL);
+        trenoFd = socket(AF_UNIX, SOCK_STREAM, DEFAULT_PROTOCOL);
         indirizzoServer.sun_family = AF_UNIX;
         do
         {
@@ -120,7 +120,6 @@ int trenoETCS2(int id, int mappa)
         sleep(2);
         
     }
-    // libero il binario precedente alla stazione
 
     trenoFd = socket (AF_UNIX, SOCK_STREAM, DEFAULT_PROTOCOL);
     indirizzoServer.sun_family = AF_UNIX;
@@ -135,6 +134,8 @@ int trenoETCS2(int id, int mappa)
     } while (connessione == -1);
     buffer[1]=i;
     write(trenoFd,buffer,8);
+
+    // libero il binario precedente alla stazione
     rilascioUltimoBinario(logFd, fdMaPrecedente, itinerario, i);
     printf("Treno %d ha terminato la sua missione\n",id);
     close(trenoFd);
@@ -156,10 +157,8 @@ int creazione_treni(int numTreni, int mappa, char *modalita)
             if(child_pids[i-1] == 0)
             {
                 trenoETCS1(i, mappa);   // ad ogni treno viene passato il proprio id
-                //exit(0);
             }
         }
-
     }
     else    // modalita ETCS2
     {
@@ -169,25 +168,17 @@ int creazione_treni(int numTreni, int mappa, char *modalita)
             if(child_pids[i-1] == 0)
             {
                 trenoETCS2(i, mappa);   // ad ogni treno viene passato il proprio id
-                //exit(0);
             }
         }
     }
-    time_t date;
-    date = time(NULL);
-    printf("%s\n",ctime(&date));
-
-    while((countEndTreni!=TRENI_MAPPA1 && mappa == 1)||(countEndTreni!=TRENI_MAPPA2 && mappa==2));
+    while((countEndTreni!=TRENI_MAPPA1 && mappa == 1)||(countEndTreni!=TRENI_MAPPA2 && mappa==2)); //attesa attiva per aspettare terminazione treni
 
     for(int i=0;i<countEndTreni;i++)
     {
-        printf("Children %d: %d\n",i,child_pids[i]);
         kill(child_pids[i],SIGINT);
     }
-    date = time(NULL);
-    printf("%s\n",ctime(&date));
-
     printf("Tutti i treni hanno terminato la loro missione...\n");
+
     if(strcmp(modalita, ETCS2)==0)
     {
         // leggo il pid di RBC dal file
@@ -195,7 +186,6 @@ int creazione_treni(int numTreni, int mappa, char *modalita)
         int pidRbc;
         fscanf(fdPid, "%d", &pidRbc);
         fclose(fdPid);
-        printf("QUI %d\n",pidRbc);
         kill(pidRbc, SIGUSR2);
         unlink("serverRBC");
     }
@@ -226,7 +216,7 @@ int padre_treni(char *mappa, char *modalita)
     creazioneDirectory("../log");
     creazioneDirectory("../directoryMA");
     char s[20]="../directoryMA/MA";
-    for(int i=0;i<16;i++)
+    for(int i=0;i<16;i++) //inizializzazione file MA
     {
         sprintf (s,"../directoryMA/MA%02d",i+1);
         fd = open(s,O_RDWR|O_CREAT, 0666);
@@ -259,12 +249,12 @@ int main(int argc, char *param[])
         {
             mappaSelezionata = MAPPA2;
         }
-        if(fork() == 0)
+        if(fork() == 0) //registro
         {
             pidRegistro = getpid();
             registro(mappaSelezionata);
         }
-        else if(fork() == 0)
+        else if(fork() == 0) //padre_treni
         {
             padre_treni(mappaSelezionata, ETCS1);
         }
@@ -283,10 +273,8 @@ int main(int argc, char *param[])
             {
                 mappaSelezionata = MAPPA2;
             }
-            if(fork() == 0)
+            if(fork() == 0) //RBC
             {
-                pidRBC = getpid();
-                printf("pid rbc: %d\n",pidRBC);
                 execl("./RBC", "RBC", mappaSelezionata, NULL);  // avvio del server RBC con parametro la mappa selezionata
             }
         } else if(strcmp(param[1],ETCS2)==0) //ETCS2
@@ -299,12 +287,12 @@ int main(int argc, char *param[])
             {
                 mappaSelezionata = MAPPA2;
             }
-            if(fork() == 0)
+            if(fork() == 0) //registro
             {
                 pidRegistro = getpid();
                 registro(mappaSelezionata);
             }
-            else if(fork() == 0)
+            else if(fork() == 0) //padre_treni
             {
                 padre_treni(mappaSelezionata, ETCS2);
             }

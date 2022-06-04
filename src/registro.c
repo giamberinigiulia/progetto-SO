@@ -17,7 +17,7 @@
 #define DEFAULT_PROTOCOL 0
 
 
-void itinerario(char buffer[100], int socket_client)
+void itinerario(char buffer[100], int socket_client) //fornisce itinerario al treno, invocato dal registro passandogli l'id del treno e la mappa selezionata
 {
     int mappa1 [4][8]=
     {
@@ -34,8 +34,8 @@ void itinerario(char buffer[100], int socket_client)
         {6,8,3,2,1,1,-1},
         {5,4,3,2,1,1,-1}
     };
-    int treno = buffer[0] - '0';//atoi(buffer[0]); //trasformo in intero l'id del treno
-    int mappa = buffer[2] - '0';//atoi(buffer[2]); //trasformo in intero l'id della mappa
+    int treno = buffer[0] - '0';//trasformo in intero l'id del treno
+    int mappa = buffer[2] - '0';//trasformo in intero l'id della mappa
     if(mappa == 1)
         write(socket_client, mappa1[treno-1], 32);
     else 
@@ -44,7 +44,7 @@ void itinerario(char buffer[100], int socket_client)
     exit(0);
 }
 
-int registro(char *inputMappa)
+int registro(char *inputMappa) //gestisce le richieste degli itinerari da parte dei treni e dell'RBC (nella modalità ETCS2)
 {
     int countTreni = 0;
     if(strcmp(inputMappa, MAPPA1) == 0)    // se la mappa selezionata e' MAPPA1, il padre crea 4 figli (treni)
@@ -53,7 +53,7 @@ int registro(char *inputMappa)
 
     int socket_server; // Variabile che contiene il descrittore per il socket che andremo a creare
     int socket_client, len; // Socket del client e dimensione della struttura del socket
-    struct sockaddr_un mio_server; // Struttura che contiene i dettagli del server
+    struct sockaddr_un serverRegistro; // Struttura che contiene i dettagli del server
     struct sockaddr_un client;
     int *risposta;
     char buffer_ricezione[100];
@@ -65,14 +65,13 @@ int registro(char *inputMappa)
         return 1;
     }
 
-    mio_server.sun_family = AF_UNIX;
-    strcpy(mio_server.sun_path, "serverRegistro");
+    serverRegistro.sun_family = AF_UNIX;
+    strcpy(serverRegistro.sun_path, "serverRegistro");
     unlink("serverRegistro");
-    bind (socket_server, (struct sockaddr *)&mio_server, sizeof (mio_server));
+    bind (socket_server, (struct sockaddr *)&serverRegistro, sizeof (serverRegistro));
 
     listen (socket_server, 10);
     printf ("In ascolto.\n");
-
 
     while(1)
     {
@@ -84,7 +83,7 @@ int registro(char *inputMappa)
 
             read(socket_client, buffer_ricezione, 100);
             printf("Ricezione: %s\n",buffer_ricezione);
-            itinerario(buffer_ricezione, socket_client);
+            itinerario(buffer_ricezione, socket_client); //invoca itinerario, che si occupa di fornire al treno il suo percorso (tramite socket_client)
             exit(0);
         }
         else 
@@ -92,9 +91,5 @@ int registro(char *inputMappa)
             close(socket_client);
         }
     }
-
-    close(socket_client);
-    close(socket_server);
-    unlink("serverRegistro");
     return 0;
 }

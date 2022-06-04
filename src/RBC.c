@@ -20,12 +20,15 @@
 #define TRENI_MAPPA2 5
 #define DEFAULT_PROTOCOL 0
 
-void handlerRBC(int signalNum)
+void handlerRBC(int signalNum) //handler gestione segnale SIGUSR2
 {
+    printf("RBC ha terminato la sua missione...\n");
+    char rm[23] = {"rm -rf pidRBC.txt"};
+    system(rm);
     kill(getpid(), SIGINT);
 }
 
-
+//funzione per controllo disponibilità segmento successivo. Il controllo è effettuato sulla struttura dati e non sui file
 char* checkAutorizzazione(int buffer[3], int socket_client, int MAs[16], int Stazioni[8], int itinerari[5][8])
 {
     time_t date;
@@ -40,63 +43,42 @@ char* checkAutorizzazione(int buffer[3], int socket_client, int MAs[16], int Sta
     int binSuccessivo = itinerari[idTreno][posizioneSuccessiva]-1;
 
     date = time(NULL);
-    if(itinerari[idTreno][posizioneSuccessiva+1]==-1)
+    if(itinerari[idTreno][posizioneSuccessiva+1]==-1) //sono nell'ultimo binario, accedo alla stazione
     {
-        //sono nell'ultimo binario, accedo alla stazione
         MAs[binAttuale] = 0;
         Stazioni[binSuccessivo]++;
-        //printf("[TRENO RICHIEDENTE AUTORIZZAZIONE: T%d],[SEGMENTO ATTUALE: MA%d],[SEGMENTO RICHIESTO: S%d],[AUTOIZZATO: SI], %s",idTreno+1,binAttuale+1,binSuccessivo+1,ctime(&date));
         sprintf(recordLog, "[TRENO RICHIEDENTE AUTORIZZAZIONE: T%d],[SEGMENTO ATTUALE: MA%d],[SEGMENTO RICHIESTO: S%d],[AUTOIZZATO: SI], %s",idTreno+1,binAttuale+1,binSuccessivo+1,ctime(&date));
     }
     else 
     {
-        if(posizioneSuccessiva == 1 && MAs[binSuccessivo] == 0)
+        if(posizioneSuccessiva == 1 && MAs[binSuccessivo] == 0) //sono in una stazione attualmente, la lascio e entro nel segmento successivo
         {
-            //sono in una stazione attualmente, la lascio e entronel segmento successivo
             Stazioni[binAttuale]--;
             MAs[binSuccessivo] = 1;
-            //printf("[TRENO RICHIEDENTE AUTORIZZAZIONE: T%d],[SEGMENTO ATTUALE: S%d],[SEGMENTO RICHIESTO: MA%d],[AUTOIZZATO: SI], %s",idTreno+1,binAttuale+1,binSuccessivo+1,ctime(&date));
             sprintf(recordLog, "[TRENO RICHIEDENTE AUTORIZZAZIONE: T%d],[SEGMENTO ATTUALE: S%d],[SEGMENTO RICHIESTO: MA%d],[AUTOIZZATO: SI], %s",idTreno+1,binAttuale+1,binSuccessivo+1,ctime(&date));
         }
-        else if(MAs[binSuccessivo] == 0)
+        else if(MAs[binSuccessivo] == 0) //situazione da binario a binario -> avanzo solo se libero
         {
-            //situazione da binario a binario
             MAs[binAttuale] = 0;
             MAs[binSuccessivo] = 1;
-            //printf("[TRENO RICHIEDENTE AUTORIZZAZIONE: T%d],[SEGMENTO ATTUALE: MA%d],[SEGMENTO RICHIESTO: MA%d],[AUTOIZZATO: SI], %s",idTreno+1,binAttuale+1,binSuccessivo+1,ctime(&date));
             sprintf(recordLog, "[TRENO RICHIEDENTE AUTORIZZAZIONE: T%d],[SEGMENTO ATTUALE: MA%d],[SEGMENTO RICHIESTO: MA%d],[AUTOIZZATO: SI], %s",idTreno+1,binAttuale+1,binSuccessivo+1,ctime(&date));
         }
-        else
+        else //binario successivo occupato
         { 
             auth[0] = 0; 
-            //printf("[TRENO RICHIEDENTE AUTORIZZAZIONE: T%d],[SEGMENTO ATTUALE: MA%d],[SEGMENTO RICHIESTO: MA%d],[AUTOIZZATO: NO], %s",idTreno+1,binAttuale+1,binSuccessivo+1,ctime(&date));
             sprintf(recordLog, "[TRENO RICHIEDENTE AUTORIZZAZIONE: T%d],[SEGMENTO ATTUALE: MA%d],[SEGMENTO RICHIESTO: MA%d],[AUTOIZZATO: NO], %s",idTreno+1,binAttuale+1,binSuccessivo+1,ctime(&date));
         }
         write(socket_client, auth, 4);
     }
 
-    printf(" ...invio dei dati al treno %d avvenuto.\n",buffer[0]);
+    printf(" ...invio dei dati al treno %d avvenuto\n",buffer[0]);
     close(socket_client);
 
     return recordLog;
 }
 
-void stampa(int MAs[16], int Stazioni[8])
-{
-    printf("--------------------------------\n");
-    for(int i=0;i<8;i++)
-    {
-        printf("Stazione[%d] = %d\n",i, Stazioni[i]);
-    }
-    printf("--------------------------------\n");
-    for(int i=0;i<16;i++)
-    {
-        printf("MAs[%d] = %d\n",i, MAs[i]);
-    }
-    printf("--------------------------------\n");
-}
 
-void RBCclient(int mappa, int itinerari[5][8])
+void RBCclient(int mappa, int itinerari[5][8]) //gestione delle richieste al registro per ottenere gli itinerari dei treni
 {
     int clientRBCFd, serverLen, connessione;
     struct sockaddr_un indirizzoServer;
@@ -105,9 +87,9 @@ void RBCclient(int mappa, int itinerari[5][8])
     serverSockAddrPtr = (struct sockaddr*) &indirizzoServer;
     serverLen = sizeof (indirizzoServer);
 
-    char arg[3] = {'0', ' ' , '0'};
+    char arg[3] = {'0', ' ' , '0'}; //inizializzazione buffer di invio dati
 
-    for(int i = 0; i < (mappa+3); i++)
+    for(int i = 0; i < (mappa+3); i++) //per ogni treno della mappa
     {
         clientRBCFd = socket (AF_UNIX, SOCK_STREAM, DEFAULT_PROTOCOL);
         indirizzoServer.sun_family = AF_UNIX;
@@ -119,8 +101,8 @@ void RBCclient(int mappa, int itinerari[5][8])
             if(connessione == -1) sleep(1);
         }while(connessione == -1);
         
-        arg[0] = (i+1) + '0';
-        arg[2] = mappa + '0';
+        arg[0] = (i+1) + '0'; //id
+        arg[2] = mappa + '0'; //mappa
         
         write(clientRBCFd, arg, 3);
         printf("Invio dati al server registro avvenuta... \n");
@@ -131,14 +113,15 @@ void RBCclient(int mappa, int itinerari[5][8])
     close(clientRBCFd);
 }
 
-void RBCserver(int mappa, int itinerari[5][8])
+void RBCserver(int mappa, int itinerari[5][8]) //gestione delle autorizzazioni a procedere per i treni, controllati dall'RBC
 {
     if (signal(SIGUSR2, handlerRBC) == SIG_ERR) //attacco handler
         printf("errore\n");
+    
     int logFd;
-    char fileLog[16]={"../log/RBC.log"};
+    char fileLog[16]={"../log/RBC.log"}; //creazione Log RBC
     umask(000);
-    remove(fileLog);
+    remove(fileLog); //rimuove il file se già presente
     logFd = open(fileLog,O_RDWR|O_CREAT, 0666);
 
     char * recordLog;
@@ -162,7 +145,7 @@ void RBCserver(int mappa, int itinerari[5][8])
     bind (socket_server, (struct sockaddr *)&serverRBC, sizeof (serverRBC));
 
     listen (socket_server, 15);
-    printf ("In ascolto.\n");
+    printf ("\nIn ascolto.\n");
 
     //Strutture dati RBC
     int MAs[16] = {0};
@@ -170,13 +153,11 @@ void RBCserver(int mappa, int itinerari[5][8])
 
     for(int i=0;i<mappa+3; i++)
     {
-        Stazioni[itinerari[i][0]-1] = 1;
+        Stazioni[itinerari[i][0]-1] = 1; //setta le stazioni in cui sono di partenza i treni
     }
 
     while(1)
     {
-        //socket_server = socket (AF_UNIX, SOCK_STREAM, DEFAULT_PROTOCOL);
-        //printf("SOno nel while\n");
         int clientLen = sizeof(client);
         socket_client = accept(socket_server, (struct sockaddr *)&client, &clientLen);
         if(fork() == 0)
@@ -188,7 +169,6 @@ void RBCserver(int mappa, int itinerari[5][8])
                         
             recordLog = checkAutorizzazione(buffer,socket_client,MAs,Stazioni,itinerari);
 
-            //stampa(MAs,Stazioni);
             write(logFd, recordLog, strlen(recordLog));
             exit(0);
         }
@@ -197,11 +177,6 @@ void RBCserver(int mappa, int itinerari[5][8])
             close(socket_client);
         }
     }
-    close(logFd);
-    close(socket_client);
-    close(socket_server);
-    printf("Chiusura canale di comunicazione.\n");
-    unlink("serverRBC");
     exit(0);
 }
 
@@ -212,6 +187,7 @@ int main(int argc, char* argv[])
     printf("pid: %d\n", getpid());
     fprintf(fdPid, "%d", getpid());
     fclose(fdPid);
+    
     /*RBC CLIENT*/
     int mappa = 0;
     if (strcmp(argv[1],MAPPA1)==0)
