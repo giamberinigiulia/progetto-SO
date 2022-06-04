@@ -184,10 +184,9 @@ int main(int argc, char* argv[])
 {
     // scrivo nel file il pid
     FILE *fdPid = fopen ("pidRBC.txt", "w");
-    printf("pid: %d\n", getpid());
     fprintf(fdPid, "%d", getpid());
     fclose(fdPid);
-    
+
     /*RBC CLIENT*/
     int mappa = 0;
     if (strcmp(argv[1],MAPPA1)==0)
