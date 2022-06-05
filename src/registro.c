@@ -44,13 +44,8 @@ void itinerario(char buffer[100], int socket_client) //fornisce itinerario al tr
     exit(0);
 }
 
-int registro(char *inputMappa) //gestisce le richieste degli itinerari da parte dei treni e dell'RBC (nella modalità ETCS2)
+int registro() //gestisce le richieste degli itinerari da parte dei treni e dell'RBC (nella modalità ETCS2)
 {
-    int countTreni = 0;
-    if(strcmp(inputMappa, MAPPA1) == 0)    // se la mappa selezionata e' MAPPA1, il padre crea 4 figli (treni)
-        countTreni = 4;
-    else countTreni = 5; //mappa = 2;
-
     int socket_server; // Variabile che contiene il descrittore per il socket che andremo a creare
     int socket_client, len; // Socket del client e dimensione della struttura del socket
     struct sockaddr_un serverRegistro; // Struttura che contiene i dettagli del server

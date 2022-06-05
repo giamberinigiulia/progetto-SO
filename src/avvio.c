@@ -252,7 +252,7 @@ int main(int argc, char *param[])
         if(fork() == 0) //registro
         {
             pidRegistro = getpid();
-            registro(mappaSelezionata);
+            registro();
         }
         else if(fork() == 0) //padre_treni
         {
@@ -290,7 +290,7 @@ int main(int argc, char *param[])
             if(fork() == 0) //registro
             {
                 pidRegistro = getpid();
-                registro(mappaSelezionata);
+                registro();
             }
             else if(fork() == 0) //padre_treni
             {
