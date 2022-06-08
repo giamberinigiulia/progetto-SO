@@ -30,6 +30,7 @@ pid_t pidRBC;
 void error() //gestione errore inserimento parametri
 {
     printf("Errore nell'inserimento dei parametri\n");
+    exit(0);
 }
 
 void handler(int signalNum) //handler gestione segnali SIGUSR1
@@ -249,6 +250,7 @@ int main(int argc, char *param[])
         {
             mappaSelezionata = MAPPA2;
         }
+        else error();
         if(fork() == 0) //registro
         {
             pidRegistro = getpid();
@@ -273,10 +275,12 @@ int main(int argc, char *param[])
             {
                 mappaSelezionata = MAPPA2;
             }
+            else error();
             if(fork() == 0) //RBC
             {
                 execl("./RBC", "RBC", mappaSelezionata, NULL);  // avvio del server RBC con parametro la mappa selezionata
             }
+            
         } else if(strcmp(param[1],ETCS2)==0) //ETCS2
         {
             if(strcmp(param[2],MAPPA1)==0) //MAPPA1
@@ -287,6 +291,7 @@ int main(int argc, char *param[])
             {
                 mappaSelezionata = MAPPA2;
             }
+            else error();
             if(fork() == 0) //registro
             {
                 pidRegistro = getpid();
