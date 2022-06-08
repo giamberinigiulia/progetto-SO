@@ -196,7 +196,7 @@ int creazione_treni(int numTreni, int mappa, char *modalita)
 }
 
 // funzione per creare la directory per i file MA e la directory per i file di log
-int creazioneDirectory(char nome[19])
+int creazioneDirectory(char *nome)
 {
     char rm[23];
     sprintf (rm,"rm -rf %s",nome);
