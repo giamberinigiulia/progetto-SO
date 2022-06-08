@@ -30,7 +30,7 @@ pid_t pidRBC;
 void error() //gestione errore inserimento parametri
 {
     printf("Errore nell'inserimento dei parametri\n");
-    exit(0);
+    exit(EXIT_FAILURE);
 }
 
 void handler(int signalNum) //handler gestione segnali SIGUSR1
